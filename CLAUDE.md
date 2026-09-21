@@ -267,3 +267,57 @@ Do not update it for trivial changes such as formatting, comments, renaming loca
 The file should always represent the current state of the project, not a detailed change history.
 
 Keep it concise and understandable for an external reader who does not have to inspect the complete codebase.
+
+## Current Development Phase – Vector Search and LLM
+
+The project is now entering a new development stage focused on semantic search and later LLM integration.
+
+### Phase 1 – Semantic Vector Search
+
+Goal: Extend the Festival Planner with semantic search for festival acts.
+
+The planned flow is:
+
+`User query → Embedding model → Query vector → PostgreSQL/pgvector → Matching acts`
+
+Main tasks:
+
+* define which festival data should be used for semantic search
+* extend the domain model with searchable text fields where required
+* add pgvector support to PostgreSQL
+* generate and store embeddings for festival data
+* implement vector similarity search
+* expose the search through the FastAPI backend
+* integrate semantic search into the frontend
+* add tests and review the implementation
+
+Phase 1 does **not** use an LLM. Its result is a ranked list of semantically matching festival acts.
+
+### Phase 2 – LLM / RAG
+
+Phase 2 starts only after Phase 1 is working and reviewed.
+
+The retrieval results from Phase 1 will then be provided to an LLM as context.
+
+The planned flow is:
+
+`User query → Vector search → Matching acts → LLM context → Generated answer`
+
+Goal: Allow users to ask natural-language questions about the festival and receive answers based on the retrieved festival data.
+
+The existing vector search remains the retrieval layer. The LLM must not replace the database search or invent festival information that is not contained in the retrieved data.
+
+### Development Rule
+
+Implement the two phases separately.
+
+Do not introduce LLM or RAG functionality while Phase 1 is being implemented unless explicitly requested.
+
+For every larger implementation step:
+
+1. analyze the required change
+2. update requirements/domain model/architecture if necessary
+3. implement the smallest coherent step
+4. run tests
+5. review the result before continuing
+
