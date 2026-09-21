@@ -1,0 +1,41 @@
+# Python
+
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtual environment
+
+.venv/
+venv/
+
+# Environment variables
+
+.env
+
+# SQLite
+
+*.db
+*.sqlite
+*.sqlite3
+
+# Tailwind CLI (standalone binary, downloaded per platform – see CLAUDE.md)
+
+tailwindcss
+tailwindcss.exe
+
+# IDE
+
+.vscode/
+.idea/
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Test / cache files
+
+.pytest_cache/
+.coverage
+htmlcov/

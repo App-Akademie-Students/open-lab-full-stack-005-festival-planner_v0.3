@@ -1,0 +1,4 @@
+/* Tailwind source for static/style.css – build: see "Build CSS" in CLAUDE.md.
+   Only static/ is scanned for class names; classes set in app.js must be written out in full. */
+@import "tailwindcss" source(none);
+@source "../static";
