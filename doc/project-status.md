@@ -9,6 +9,8 @@ sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 - **Name:** Festival Planner
 - **Version/Phase:** v0.1 und v0.2 umgesetzt und reviewt. **v0.3 in Arbeit** – die
   Anforderungen liegen als Entwurf vor, vier neue Stories sind umgesetzt (US-7 bis US-10).
+- **Neue Entwicklungsphase:** semantische Vektorsuche (Phase 1), danach LLM/RAG (Phase 2) –
+  siehe Abschnitt 6.
 - Lernprojekt: schrittweise Entwicklung mit Claude, Dokumentation auf Deutsch, Code auf
   Englisch.
 
@@ -22,6 +24,9 @@ Ein minimalistischer Web-Planer für Festivalbesucher, der eine Frage beantworte
 - Architektur-Leitlinie seit v0.2: nicht mehr „so klein wie möglich", sondern gut
   strukturiert und erweiterbar. Neue Struktur (Dateien, Schichten) kommt erst bei konkretem
   Bedarf, nicht auf Vorrat.
+- Erweiterung in Planung: Acts semantisch suchen (nach Bedeutung statt exakter Begriffe),
+  später Fragen in natürlicher Sprache per LLM beantworten – nur auf Basis der gefundenen
+  Festivaldaten.
 
 ## 3. Architektur und Technologien
 
@@ -29,6 +34,8 @@ Ein minimalistischer Web-Planer für Festivalbesucher, der eine Frage beantworte
 Verbindung über `DATABASE_URL` in `.env` via `python-dotenv`), HTML + Vanilla JS (kein
 JS-Framework, kein JS-Build), Tailwind CSS v4 (Standalone-CLI, erzeugtes CSS ist eingecheckt).
 Tests: pytest + httpx (nur Dev), laufen gegen In-Memory-SQLite, nicht gegen Neon.
+Geplant für die Vektorsuche: PostgreSQL-Erweiterung pgvector plus ein Embedding-Modell
+(noch nicht ausgewählt).
 
 Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 
@@ -112,6 +119,17 @@ Details: [`domain-model.md`](domain-model.md).
   Die übrigen v0.3-Anforderungen stehen im Entwurf von [`requirements.md`](requirements.md),
   sind aber noch nicht als Stories im Backlog. Die Festival-Entität ist bis auf Weiteres
   zurückgestellt.
+- **Vektorsuche und LLM (neue Phase):** beschlossen, noch nicht umgesetzt. Zwei getrennte
+  Phasen; Phase 2 beginnt erst, wenn Phase 1 funktioniert und reviewt ist.
+  - *Phase 1 – semantische Vektorsuche, ohne LLM:*
+    `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`.
+    Ergebnis ist eine nach Ähnlichkeit sortierte Liste von Acts. Schritte: durchsuchbare
+    Daten festlegen, Domain Model um Textfelder erweitern, pgvector einrichten, Embeddings
+    erzeugen und speichern, Ähnlichkeitssuche als API-Endpunkt und im Frontend, Tests, Review.
+  - *Phase 2 – LLM/RAG:*
+    `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`.
+    Die Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen
+    erfinden, die nicht in den gefundenen Daten stehen.
 - Tests: `python -m pytest`, 36 grün (Stand 2026-09-21).
 
 ## 7. Offene Entscheidungen und bekannte Probleme
@@ -123,6 +141,14 @@ Details: [`domain-model.md`](domain-model.md).
 - Mehrere Festivals (C4): gilt UTC+02:00 für alle, oder eigene Zeitzone pro Festival?
 - Import (B7): Datenformat, Endpunkt oder Skript, Art des Zugriffsschutzes?
 - Festival-Entität (B5): gehört ein `Artist` zu einem Festival oder wird er geteilt?
+
+**Offene Fragen zur Vektorsuche (Phase 1):**
+
+- Welche Daten werden durchsucht? Aktuell haben `Artist`/`Stage` nur einen Namen – für eine
+  sinnvolle semantische Suche fehlen beschreibende Textfelder (z. B. Genre, Beschreibung).
+- Welches Embedding-Modell (lokal oder über eine API) und damit welche Vektordimension?
+- Wann werden Embeddings erzeugt (im Seed-Skript, beim Speichern, separat)?
+- Wie wird getestet? Die Tests laufen gegen SQLite, das pgvector nicht unterstützt.
 
 **Bekannte Einschränkungen:**
 
@@ -137,12 +163,15 @@ Details: [`domain-model.md`](domain-model.md).
 ## 8. Nächste geplante Schritte
 
 1. US-9 und US-10 (Favoriten, persönlicher Zeitplan) testen und reviewen.
-2. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
-3. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
+2. Vektorsuche Phase 1 vorbereiten: offene Fragen klären (Abschnitt 7), dann Requirements,
+   Domain Model und Architektur ergänzen und in kleinen Schritten umsetzen. Phase 2 (LLM/RAG)
+   erst nach Review von Phase 1.
+3. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
+4. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
    - mehrere Festivals + Festivalauswahl (C4, C5, F5, B5, B6) – zurückgestellt,
    - Datenimport über einen geschützten Backend-Zugang (B7),
    - Offline-Verfügbarkeit (C9, F10).
-4. Die Festival-Entität erfordert eine Erweiterung von Domain Model und Architektur (neue
+5. Die Festival-Entität erfordert eine Erweiterung von Domain Model und Architektur (neue
    Entität, FKs von `Stage`/`Act`) – vor der Umsetzung dokumentieren.
 
 Weitere Quellen: [`../CLAUDE.md`](../CLAUDE.md), [`requirements.md`](requirements.md),

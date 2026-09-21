@@ -35,17 +35,62 @@ Claude Code wird dabei unterstützend eingesetzt, zum Beispiel für:
 
 ---
 
+## Aktueller Stand
+
+Umgesetzt sind v0.1, v0.2 und Teile von v0.3: Programm als chronologische Liste, nach Tag
+gruppiert, Filter nach Tag und Bühne, Anzeige „läuft jetzt / kommt als Nächstes",
+responsive Oberfläche mit Tailwind CSS sowie Favoriten mit persönlichem Zeitplan (nur im
+Browser). Die Daten liegen in PostgreSQL bei Neon und werden per Seed-Skript erzeugt.
+
+Details zu Stand, offenen Fragen und nächsten Schritten:
+[`doc/project-status.md`](doc/project-status.md). Befehle zum Starten, Seeden und Testen
+stehen in [`CLAUDE.md`](CLAUDE.md) unter „Project Commands".
+
+---
+
+## Neue Entwicklungsrichtung: Vektorsuche und LLM
+
+Als Nächstes wird der Festival Planner um eine semantische Suche erweitert – in zwei
+getrennten Phasen. Phase 2 beginnt erst, wenn Phase 1 funktioniert und reviewt ist.
+
+**Phase 1 – Semantische Vektorsuche (ohne LLM)**
+
+Ziel: Acts nicht nur über exakte Begriffe finden, sondern nach Bedeutung (z. B.
+„ruhige Musik am Abend"). Ergebnis ist eine nach Ähnlichkeit sortierte Liste passender Acts.
+
+```text
+Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts
+```
+
+Geplant: durchsuchbare Textfelder im Domain Model festlegen, pgvector in PostgreSQL
+aktivieren, Embeddings erzeugen und speichern, Ähnlichkeitssuche im Backend als
+FastAPI-Endpunkt bereitstellen und im Frontend einbinden – jeweils mit Tests und Review.
+
+**Phase 2 – LLM / RAG**
+
+Die Treffer aus Phase 1 werden einem LLM als Kontext übergeben, das daraus eine Antwort auf
+Fragen in natürlicher Sprache formuliert.
+
+```text
+Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort
+```
+
+Die Vektorsuche bleibt dabei die Retrieval-Schicht; das LLM ersetzt die Datenbanksuche nicht
+und darf keine Festivalinformationen erfinden, die nicht in den gefundenen Daten stehen.
+
+**Stand:** Phase 1 ist in Vorbereitung, noch nicht umgesetzt. Phase 2 ist noch nicht begonnen.
+
+---
+
 ## Technologien
 
-Geplant sind:
-
 * **Python**
-* **FastAPI**
-* **SQLite**
+* **FastAPI** (gestartet über uvicorn)
 * **SQLAlchemy**
-* **HTML**
-* **CSS**
-* **JavaScript**
+* **PostgreSQL** (gehostet bei Neon), Treiber `psycopg` – ab Phase 1 zusätzlich **pgvector**
+* **HTML**, **Tailwind CSS** (v4, Standalone-CLI)
+* **Vanilla JavaScript**
+* **pytest** + **httpx** (nur für die Entwicklung)
 * **Claude Code**
 * **Visual Studio Code**
 
@@ -238,19 +283,27 @@ festival-planner/
 ├── README.md
 ├── CLAUDE.md
 ├── requirements.txt
+├── requirements-dev.txt
 ├── .gitignore
+│
+├── app/            # FastAPI-Backend: main, routers, crud, schedule, models, db, seed
+├── static/         # Frontend: index.html, app.js, erzeugtes style.css
+├── tailwind/       # Tailwind-Quelle input.css
+├── tests/          # pytest-Tests
 │
 └── doc/
     ├── claude-install.md
     ├── roadmap.md
     ├── requirements.md
+    ├── requirements-history/
     ├── domain-model.md
     ├── architecture.md
-    └── backlog.md
+    ├── backlog.md
+    ├── review.md
+    └── project-status.md
 ```
 
-Die geplante Struktur der Anwendung (`app/`, `static/`, `tests/`) ist in
-[`doc/architecture.md`](doc/architecture.md) beschrieben.
+Aufgaben der einzelnen Module: [`doc/architecture.md`](doc/architecture.md).
 
 ---
 
