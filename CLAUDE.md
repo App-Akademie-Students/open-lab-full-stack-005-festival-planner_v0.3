@@ -74,6 +74,11 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   es liegt nicht eingecheckt im Projektordner (siehe `.gitignore`). Nur Klassennamen aus
   `static/` werden erkannt; in `app.js` gesetzte Klassen müssen deshalb vollständig
   ausgeschrieben sein (kein Zusammensetzen wie `` `bg-${color}-50` ``).
+* **Caching statischer Dateien:** `app/main.py` liefert `static/` mit `Cache-Control: no-cache`
+  aus (`NoCacheStaticFiles`). Ohne den Header cacht der Browser `app.js`/`style.css`
+  heuristisch und fragt sie nach einer Frontend-Änderung gar nicht erst neu an – dann läuft die
+  neue `index.html` mit der alten `app.js`. So wird jede Datei kurz geprüft (304, falls
+  unverändert); kein Build-Schritt für Versions-Hashes nötig.
 
 ## Functional Requirements
 

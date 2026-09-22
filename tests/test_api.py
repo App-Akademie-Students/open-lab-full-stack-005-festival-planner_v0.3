@@ -129,6 +129,14 @@ def test_root_serves_index_html():
     assert "text/html" in response.headers["content-type"]
 
 
+def test_static_files_must_be_revalidated():
+    # Otherwise the browser may keep an old app.js next to a new index.html.
+    for path in ["/", "/app.js", "/style.css"]:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+
+
 def add_second_day():
     """Adds acts on 2026-09-12, one of them running past midnight into the 13th."""
     db = TestSessionLocal()
