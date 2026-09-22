@@ -1,6 +1,6 @@
 # Projektstatus – Festival Planner
 
-Stand: 2026-09-21. Kompakter Überblick über den aktuellen Stand, gedacht für externe
+Stand: 2026-09-22. Kompakter Überblick über den aktuellen Stand, gedacht für externe
 Gesprächspartner (z. B. ChatGPT), die das Projekt ohne Code und ohne alle Dokumente verstehen
 sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 
@@ -119,8 +119,11 @@ Details: [`domain-model.md`](domain-model.md).
   Die übrigen v0.3-Anforderungen stehen im Entwurf von [`requirements.md`](requirements.md),
   sind aber noch nicht als Stories im Backlog. Die Festival-Entität ist bis auf Weiteres
   zurückgestellt.
-- **Vektorsuche und LLM (neue Phase):** beschlossen, noch nicht umgesetzt. Zwei getrennte
+- **Vektorsuche und LLM (neue Phase):** beschlossen, Umsetzung begonnen. Zwei getrennte
   Phasen; Phase 2 beginnt erst, wenn Phase 1 funktioniert und reviewt ist.
+  Stand Phase 1: Roadmap-Schritt 1 (Frontend-Zielbild) erledigt – Suchbereich „Acts suchen"
+  über den Favoriten mit Suchfeld, Button, klickbarer Beispielanfrage und Ergebnisliste; die
+  Ergebnisse sind feste Mock-Daten in `static/app.js` (keine API, keine Embeddings).
   - *Phase 1 – semantische Vektorsuche, ohne LLM:*
     `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`.
     Ergebnis ist eine nach Ähnlichkeit sortierte Liste von Acts. Schritte: durchsuchbare

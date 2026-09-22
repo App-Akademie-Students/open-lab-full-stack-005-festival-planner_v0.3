@@ -3,7 +3,7 @@
 ## Phase 1 - Vectorsuche
 
 
-1  Frontend-Zielbild
+1  Frontend-Zielbild – erledigt (2026-09-22): Suchbereich mit Mock-Ergebnissen in `static/`
 
 2  Requirement
 
