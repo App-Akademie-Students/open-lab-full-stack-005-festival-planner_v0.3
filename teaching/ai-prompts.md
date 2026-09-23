@@ -16,3 +16,23 @@ Verschaffe dir bitte zuerst einen Überblick über den aktuellen Stand des Proje
     
 6. Was wäre jetzt der sinnvollste nächste Schritt?
 
+## 1. Frontend-Zielbild
+
+Phase 1 – Schritt 1: Baue das Frontend-Zielbild für die semantische Suche.
+
+Ergänze im bestehenden Festival-Planner:
+
+- ein Suchfeld
+    
+- einen Button „Suchen“
+    
+- einen Bereich für Suchergebnisse
+    
+- eine sichtbare Beispielanfrage wie „ruhige elektronische Musik“
+    
+
+Verwende zunächst nur Mock-Daten für die Ergebnisse.
+
+Noch keine API-Anbindung, keine Embeddings und keine Vektorsuche implementieren.
+
+Bestehende Funktionen dürfen nicht verändert werden.
