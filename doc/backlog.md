@@ -1,6 +1,6 @@
 # Backlog
 
-Status: Stand 2026-09-21. v0.1 bestätigt und umgesetzt (Roadmap-Schritt 9). v0.2 ist
+Status: Stand 2026-09-23. v0.1 bestätigt und umgesetzt (Roadmap-Schritt 9). v0.2 ist
 umgesetzt, in zwei Phasen: Refactoring Phase 1 (T-1 bis T-9, `Artist`/`Stage`/`Act` statt
 `ProgramItem`) und Refactoring Phase 2 (T-10 bis T-13, Umstellung von SQLite auf PostgreSQL
 bei Neon) – siehe die beiden Abschnitte unten.
@@ -17,6 +17,9 @@ gruppieren und filtern, umgesetzt) aufgenommen – siehe Abschnitt „v0.3" unte
 [`review.md`](review.md), Abschnitt 8 (Stand 2026-09-21), freigegeben: „Freigeben mit nicht
 blockierenden Änderungswünschen", keine Blocker; die Änderungswünsche stehen als T-22 bis T-26
 unter „Offene Punkte aus dem Review" (alle erledigt).
+US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan) sind in [`review.md`](review.md),
+Abschnitt 9 (Stand 2026-09-23), ebenfalls freigegeben: „Freigeben mit nicht blockierenden
+Änderungswünschen", keine Blocker; offen sind daraus T-27 und T-28.
 
 Abgeleitet aus den Muss-Anforderungen in [`requirements.md`](requirements.md).
 Technischer Rahmen: [`architecture.md`](architecture.md).
@@ -231,6 +234,13 @@ Aus Abschnitt 8 (v0.3, US-7/US-8):
 | T-24 | Leer-Hinweis unterscheiden: leere Datenbank vs. Filterkombination ohne Acts | erledigt |
 | T-25 | Test für `build_acts()` in `app/seed.py`: Anzahl Tage, `ends_at > starts_at`, Acts über Mitternacht enden am Folgetag | erledigt |
 | T-26 | `requirements.md` nachziehen: Statuszeile und Absatz „Erweiterbarkeit" behandeln Tagesfilter/Tailwind noch als nicht umgesetzt | erledigt |
+
+Aus Abschnitt 9 (v0.3, US-9/US-10):
+
+| ID | Titel | Status |
+|---|---|---|
+| T-27 | Nativen Aufklapp-Marker in Safari/iOS ausblenden: `[&::-webkit-details-marker]:hidden` auf `<summary>` von „Meine Favoriten", sonst steht neben dem eigenen Pfeil ▸ ein zweites Dreieck | offen |
+| T-28 | Kontrast des Favoriten-Sterns auf mind. 3 : 1 erhöhen (WCAG 1.4.11), z. B. `text-gray-500` / `aria-pressed:text-amber-600`; auch auf den farbigen Status-Zeilen prüfen | offen |
 
 **T-22/T-23 – Umsetzung (2026-09-21):** Text-Badge hinter dem Titel (`STATUS_BADGES` in
 `static/app.js`, Klassen vollständig ausgeschrieben, `static/style.css` neu erzeugt).

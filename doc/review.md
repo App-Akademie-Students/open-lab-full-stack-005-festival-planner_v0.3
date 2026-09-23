@@ -542,3 +542,116 @@ vorgesehen: `seed.py` legt die Tabellen neu an (`drop_all` + `create_all`), weil
 bestehende Tabellen nicht ändert und die Constraints sonst nie in Neon ankämen. Das löst
 nebenbei den Hinweis zu den weiterlaufenden ID-Sequenzen aus Abschnitt 7. `python -m pytest`:
 36 passed. Aus den Abschnitten 6 bis 8 ist damit nichts mehr offen.
+
+## 9. Nachtrag – v0.3: US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan), Stand 2026-09-23
+
+Review von `static/app.js`, `static/index.html` und `static/style.css` (nur Frontend, kein
+Backend-Anteil) gegen die Akzeptanzkriterien in `doc/backlog.md`, `doc/requirements.md`
+(C7, C8, F7, F8), `doc/architecture.md` und `CLAUDE.md`. Der Mock-Suchbereich aus
+Roadmap-Schritt 1 der Vektorsuche ist nicht Teil dieses Reviews.
+
+Verifikation:
+
+- `python -m pytest -q`: **37 passed**, dieselben 2 bekannten Deprecation-Warnings. US-9/US-10
+  sind davon nicht abgedeckt, da es bewusst keine JS-Tests gibt (kein JS-Build, keine
+  JS-Test-Dependency).
+- `static/style.css` mit dem Tailwind-CLI-Binary (v4.3.3) neu erzeugt: **inhaltlich identisch**
+  zur eingecheckten Datei. Einziger Unterschied ist das Zeilenende nach dem Lizenzkommentar
+  (CRLF durch `core.autocrlf`). Alle in `app.js` gesetzten Klassen (u. a.
+  `aria-pressed:text-amber-500`, `sm:grid-cols-[7rem_1fr_10rem_2.75rem]`, `group-open:rotate-90`)
+  sind enthalten.
+- App gegen eine **Wegwerf-SQLite-DB** gestartet (Neon bleibt unverändert), per `python -m app.seed`
+  befüllt (44 Acts) und mit Headless-Chrome gerendert: Bereich „Meine Favoriten" sichtbar und
+  zugeklappt, Kopfzeile „(0)", Hinweis sichtbar, alle 44 Sterne `aria-pressed="false"`. Die
+  interaktiven Fälle (Markieren, Filterwechsel, Neuladen, blockierter Speicher, unbekannte `id`,
+  360 px) wurden bei der Umsetzung mit Headless-Chrome geprüft (siehe Backlog) und hier per
+  Code-Durchsicht nachvollzogen, nicht erneut live.
+
+### Erfüllung der Akzeptanzkriterien US-9
+
+- **Favoriten-Schalter pro Act, Tippen setzt/entfernt – erfüllt** (`renderFavoriteButton()`,
+  `toggleFavorite()`).
+- **Nicht nur über Farbe unterscheidbar, für Screenreader beschriftet – erfüllt.** ★/☆
+  unterscheiden sich in der Form; die Beschriftung bleibt fest („… als Favorit merken"), der
+  Zustand steckt in `aria-pressed`. Das ist das empfohlene Muster für Umschalt-Buttons – ein
+  wechselnder Text zusammen mit `aria-pressed` würde doppelt angesagt. Siehe aber ⚠️ Kontrast.
+- **Nur im Browser (`localStorage`), bleibt über Neuladen erhalten, kein Server – erfüllt.** Kein
+  `fetch` mit Favoriten, keine Backend-Änderung.
+- **Unabhängig von den Filtern – erfüllt.** `renderItem()` liest den Zustand bei jedem Rendern
+  neu aus dem `Set` `favorites`.
+- **Ohne Browser-Speicher läuft die Seite weiter – erfüllt.** Lesen und Schreiben in `try/catch`;
+  auch kaputter Inhalt unter dem Schlüssel (kein JSON, kein Array) führt zu einer leeren Menge
+  statt zu einem Fehler.
+- **Touch-Ziel mind. 44 px, 360 px ohne horizontales Scrollen – erfüllt** (`size-11`, Bühne auf
+  dem Smartphone in eigener Zeile).
+
+### Erfüllung der Akzeptanzkriterien US-10
+
+- **Kompakter Bereich über dem Programm, chronologisch, mit Tag, Zeit, Titel, Bühne – erfüllt.**
+  Die Reihenfolge kommt aus der API (`ORDER BY starts_at`), `filter()` erhält sie.
+- **Immer alle Favoriten, unabhängig vom Filter – erfüllt.** Einmaliger zusätzlicher Abruf von
+  `GET /api/program` ohne Filter (`loadAllActs()`), kein neuer Endpunkt.
+- **Hinweis ohne Favoriten – erfüllt** (live geprüft).
+- **Sofortige Aktualisierung beim Markieren – erfüllt.** `toggleFavorite()` ruft
+  `renderFavorites()` auf; wird vor dem Laden von `allActs` markiert, greift der `null`-Guard,
+  und `loadAllActs()` zeichnet danach den aktuellen Stand.
+- **Unbekannte `id`s werden ignoriert – erfüllt.** Gefiltert wird über die Acts, nicht über die
+  `id`s; auch die Anzahl in der Kopfzeile zählt nur gefundene Acts.
+- **Kompakt auf 360 px – erfüllt** (`max-h-60` mit internem Scrollen).
+- **Kein Backend-Umbau – erfüllt.**
+- **Akkordeon, beim Laden zugeklappt, Anzahl sichtbar, Tastatur/Screenreader, 44 px – erfüllt.**
+  Natives `<details>`/`<summary>` ohne `open` (live geprüft), `min-h-11`. Siehe aber ⚠️ Safari.
+
+### Findings
+
+- ⚠️ **Safari/iOS – doppelter Aufklapp-Pfeil (plausibel, nicht live geprüft).** `flex` auf
+  `<summary>` blendet in Chrome und Firefox den nativen Marker aus, deshalb zeichnet
+  `index.html` einen eigenen Pfeil ▸. WebKit rendert seinen Marker aber über das Pseudo-Element
+  `::-webkit-details-marker`, das von `display: flex` (zumindest in älteren Safari-Versionen)
+  nicht ausgeblendet wird – auf iPhones stünde dann ein zweites Dreieck vor dem eigenen Pfeil.
+  Gerade auf dem Festivalgelände ist das iPhone ein Hauptgerät. Abhilfe ohne neue Dependency:
+  `[&::-webkit-details-marker]:hidden` zusätzlich auf `<summary>`, CSS neu erzeugen. Ein Safari
+  zum Nachprüfen stand für dieses Review nicht zur Verfügung.
+- ⚠️ **UX/Barrierefreiheit – geringer Kontrast des Sterns.** Der leere Stern ☆ ist
+  `text-gray-400` auf Weiß (ca. 2,6 : 1), der gefüllte ★ `text-amber-500` (ca. 2 : 1 auf Weiß,
+  auf den bernsteinfarbenen „als Nächstes"-Zeilen noch weniger). WCAG 1.4.11 verlangt für
+  Bedienelemente mindestens 3 : 1. Der Zustand ist über die Form erkennbar (kein Verstoß gegen
+  „nur Farbe"), aber der Button selbst ist bei Sonnenlicht auf dem Gelände schwer zu sehen.
+  Vorschlag: z. B. `text-gray-500` und `aria-pressed:text-amber-600`, vollständig ausgeschrieben.
+- ⚠️ **Doku – `project-status.md` veraltet:** „36 Tests" (aktuell 37) und „US-9/US-10 noch nicht
+  reviewt". Mit diesem Review nachgezogen.
+- ✅ **Sicher gegen eingeschleustes HTML.** Titel und Bühne werden nur per `textContent` gesetzt,
+  `innerHTML` dient nur zum Leeren.
+- ✅ **Architektur- und Projektregeln eingehalten.** Nur Frontend, kein neuer Endpunkt, keine neue
+  Dependency, keine neue Datei; Klassen vollständig ausgeschrieben (Tailwind-Regel aus
+  `CLAUDE.md`). Entscheidungen (Act-`id` als Kennung, zusätzlicher ungefilterter Abruf,
+  `<details>`) sind in `architecture.md` und im Backlog dokumentiert; `requirements.md` (C7, C8,
+  F7, F8) und `domain-model.md` („Favoriten nur im Browser") passen zum Umsetzungsstand.
+
+Keine ❌-Blocker gefunden.
+
+### Nicht offensichtlich, fürs Protokoll
+
+- `loadAllActs()` hat – wie `loadProgram()` und `loadFilters()` – keine Fehlerbehandlung. Scheitert
+  der Abruf, bleibt „Meine Favoriten" versteckt (`hidden` bis zum ersten Rendern), und in der
+  Konsole steht eine unbehandelte Promise-Ablehnung. Konsistent mit dem Rest der Seite, daher
+  kein eigener Änderungswunsch; relevant wird es mit der Offline-Anforderung (C9, F10).
+- Gespeicherte `id`s ohne passenden Act bleiben dauerhaft im `localStorage` und werden nur beim
+  Anzeigen übersprungen. Harmlos, solange die Daten nur per Seed entstehen; mit einem Import
+  (B7) könnte eine alte `id` einen neuen, fremden Act als Favorit markieren (bekannte
+  Einschränkung, siehe `project-status.md`).
+- Zwei offene Tabs gleichen sich nicht ab (kein `storage`-Event); der zuletzt schreibende Tab
+  überschreibt die Favoriten des anderen. Nicht gefordert, nur zur Einordnung.
+- Die Liste im Akkordeon scrollt ab `max-h-60` intern. Chrome macht solche Bereiche selbst per
+  Tastatur fokussierbar, Safari nicht; da die Einträge keine Bedienelemente sind, betrifft das
+  nur Tastaturnutzer mit sehr vielen Favoriten in Safari.
+
+### Gesamturteil (Nachtrag US-9/US-10)
+
+**Freigeben mit (nicht blockierenden) Änderungswünschen.**
+
+Alle Akzeptanzkriterien von US-9 und US-10 sind erfüllt. Die Umsetzung bleibt wie vereinbart
+rein im Frontend, ist robust gegen fehlenden oder kaputten Browser-Speicher und gegen veraltete
+`id`s, und das eingecheckte CSS entspricht einem frischen Build. Die Änderungswünsche betreffen
+die Darstellung (Aufklapp-Pfeil in Safari, Kontrast des Sterns) und stehen im Backlog als T-27
+und T-28. Der veraltete Stand in `project-status.md` ist mit diesem Review korrigiert.
