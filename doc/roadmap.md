@@ -11,9 +11,9 @@
 
 4  Domain Model dokumentieren
 
-5  Embedding-Modell ausprobieren
+5  Embedding-Modell ausprobieren (Manuell)
 
-6  pgvector aktivieren
+6  pgvector aktivieren (Manuell)
 
 7  embedding-Spalte technisch anlegen
 
