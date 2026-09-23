@@ -3,7 +3,7 @@
 ## Phase 1 - Vectorsuche
 
 
-1  Frontend-Zielbild
+1  Frontend-Zielbild – erledigt (2026-09-22): Suchbereich mit Mock-Ergebnissen in `static/`
 
 2  Requirement
 
@@ -11,9 +11,9 @@
 
 4  Domain Model dokumentieren
 
-5  Embedding-Modell ausprobieren
+5  Embedding-Modell ausprobieren (Manuell)
 
-6  pgvector aktivieren
+6  pgvector aktivieren (Manuell)
 
 7  embedding-Spalte technisch anlegen
 

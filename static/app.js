@@ -261,6 +261,73 @@ function formatDay(isoDate) {
   return `${weekday}, ${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.`;
 }
 
+// Semantic search – target UI only (vector search phase 1, step 1). The results are fixed mock
+// data, ranked by a made-up similarity score; every query returns the same list. Titles, stages
+// and times follow the seed. Replaced by the search API in a later step.
+const MOCK_SEARCH_RESULTS = [
+  { title: "Ambient Drift", stage: "Zeltbühne", day: "Tag 3", time: "12:00–13:30", score: 0.91 },
+  { title: "Lo-Fi Lounge", stage: "Zeltbühne", day: "Tag 4", time: "11:30–13:00", score: 0.87 },
+  { title: "Chill Session", stage: "Waldbühne", day: "Tag 1", time: "16:30–17:30", score: 0.82 },
+  { title: "Electro Pulse", stage: "Zeltbühne", day: "Tag 1", time: "15:30–17:00", score: 0.74 },
+];
+
+function initSearch() {
+  const input = document.getElementById("search-input");
+  document.getElementById("search-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    renderSearchResults(input.value.trim());
+  });
+  // The example query is a button, so trying the search needs no typing.
+  document.getElementById("search-example").addEventListener("click", (event) => {
+    input.value = event.currentTarget.textContent;
+    renderSearchResults(input.value);
+  });
+}
+
+function renderSearchResults(query) {
+  const list = document.getElementById("search-list");
+  const hasQuery = query !== "";
+
+  list.innerHTML = "";
+  if (hasQuery) {
+    for (const [index, result] of MOCK_SEARCH_RESULTS.entries()) {
+      list.appendChild(renderSearchResult(result, index + 1));
+    }
+  }
+  document.getElementById("search-results-heading").textContent =
+    hasQuery ? `Passende Acts für „${query}“` : "";
+  document.getElementById("search-results-heading").hidden = !hasQuery;
+  document.getElementById("search-mock-hint").hidden = !hasQuery;
+  document.getElementById("search-empty").hidden = hasQuery;
+  list.hidden = !hasQuery;
+  document.getElementById("search-results").hidden = false;
+}
+
+function renderSearchResult(result, rank) {
+  const li = document.createElement("li");
+  li.className = "flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-sm";
+
+  const position = document.createElement("span");
+  position.className = "w-5 shrink-0 text-gray-500 tabular-nums";
+  position.textContent = `${rank}.`;
+
+  const title = document.createElement("span");
+  title.className = "min-w-0 flex-1 font-semibold break-words";
+  title.textContent = result.title;
+
+  const score = document.createElement("span");
+  score.className = "shrink-0 text-xs text-gray-500 tabular-nums";
+  score.textContent = `Relevanz ${Math.round(result.score * 100)} %`;
+
+  const details = document.createElement("span");
+  details.className = "basis-full pl-8 text-gray-600";
+  details.textContent = `${result.day} · ${result.time} · ${result.stage}`;
+
+  li.append(position, title, score, details);
+  return li;
+}
+
 loadFilters();
 loadProgram();
 loadAllActs();
+initSearch();

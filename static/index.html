@@ -31,6 +31,33 @@
         </div>
       </div>
     </header>
+    <!-- Semantic search (vector search phase 1, step 1 "Frontend-Zielbild"): target UI only.
+         Results are mock data from app.js – no API call, no embeddings yet. -->
+    <section id="search" class="mb-6 rounded-lg bg-white p-4 shadow-sm" aria-labelledby="search-heading">
+      <h2 id="search-heading" class="font-semibold text-gray-800">Acts suchen</h2>
+      <p class="mt-1 text-sm text-gray-600">Beschreibe, worauf du Lust hast – gesucht wird nach Bedeutung, nicht nach genauen Begriffen.</p>
+      <form id="search-form" class="mt-3 flex flex-col gap-2 sm:flex-row" role="search">
+        <label for="search-input" class="sr-only">Suchanfrage</label>
+        <input id="search-input" type="search" autocomplete="off"
+               placeholder="z. B. ruhige elektronische Musik"
+               class="min-h-11 w-full min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-base shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+        <button type="submit"
+                class="min-h-11 shrink-0 rounded-lg bg-indigo-600 px-5 font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">
+          Suchen
+        </button>
+      </form>
+      <p class="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+        Beispiel:
+        <button id="search-example" type="button"
+                class="min-h-11 rounded-full border border-indigo-200 bg-indigo-50 px-3 text-indigo-800 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-indigo-500">ruhige elektronische Musik</button>
+      </p>
+      <div id="search-results" class="mt-4" aria-live="polite" hidden>
+        <h3 id="search-results-heading" class="text-sm font-semibold text-gray-800"></h3>
+        <p id="search-mock-hint" class="mt-1 text-xs text-gray-500">Vorschau mit Beispieldaten – die echte Suche ist noch nicht angebunden.</p>
+        <p id="search-empty" class="mt-2 text-sm text-gray-600" hidden>Bitte gib eine Suchanfrage ein.</p>
+        <ol id="search-list" class="mt-2 divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200"></ol>
+      </div>
+    </section>
     <!-- Personal schedule (US-10): all favorites, independent of the filters, rendered by app.js.
          Native <details> accordion, collapsed by default (no "open" attribute). -->
     <details id="favorites" class="group mb-6 rounded-lg bg-white shadow-sm" hidden>
