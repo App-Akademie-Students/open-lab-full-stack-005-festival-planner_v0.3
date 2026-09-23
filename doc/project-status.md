@@ -1,6 +1,6 @@
 # Projektstatus – Festival Planner
 
-Stand: 2026-09-22. Kompakter Überblick über den aktuellen Stand, gedacht für externe
+Stand: 2026-09-23. Kompakter Überblick über den aktuellen Stand, gedacht für externe
 Gesprächspartner (z. B. ChatGPT), die das Projekt ohne Code und ohne alle Dokumente verstehen
 sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 
@@ -115,7 +115,8 @@ Details: [`domain-model.md`](domain-model.md).
 - **v0.3:** US-7 (Tailwind, responsive) und US-8 (Tage gruppieren/filtern) umgesetzt,
   reviewt und freigegeben ([`review.md`](review.md), Abschnitt 8); Review-Punkte daraus
   (T-22 bis T-26) alle erledigt. US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan)
-  umgesetzt, noch nicht reviewt.
+  umgesetzt, reviewt und freigegeben (Abschnitt 9); offen sind daraus zwei kleine
+  Darstellungspunkte (T-27 Aufklapp-Pfeil in Safari, T-28 Kontrast des Favoriten-Sterns).
   Die übrigen v0.3-Anforderungen stehen im Entwurf von [`requirements.md`](requirements.md),
   sind aber noch nicht als Stories im Backlog. Die Festival-Entität ist bis auf Weiteres
   zurückgestellt.
@@ -124,6 +125,10 @@ Details: [`domain-model.md`](domain-model.md).
   Stand Phase 1: Roadmap-Schritt 1 (Frontend-Zielbild) erledigt – Suchbereich „Acts suchen"
   über den Favoriten mit Suchfeld, Button, klickbarer Beispielanfrage und Ergebnisliste; die
   Ergebnisse sind feste Mock-Daten in `static/app.js` (keine API, keine Embeddings).
+  Roadmap-Schritt 2 (Requirement) erledigt: C11, F11, B8, T4 und die Ergänzung von T1 in
+  [`requirements.md`](requirements.md) – Acts per frei formulierter Anfrage finden, Treffer
+  nach semantischer Ähnlichkeit sortiert, deutsche Anfragen unterstützt, kein LLM. Noch nicht
+  implementiert und noch nicht als User Story im Backlog.
   - *Phase 1 – semantische Vektorsuche, ohne LLM:*
     `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`.
     Ergebnis ist eine nach Ähnlichkeit sortierte Liste von Acts. Schritte: durchsuchbare
@@ -133,7 +138,7 @@ Details: [`domain-model.md`](domain-model.md).
     `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`.
     Die Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen
     erfinden, die nicht in den gefundenen Daten stehen.
-- Tests: `python -m pytest`, 36 grün (Stand 2026-09-21).
+- Tests: `python -m pytest`, 37 grün (Stand 2026-09-23).
 
 ## 7. Offene Entscheidungen und bekannte Probleme
 
@@ -145,11 +150,15 @@ Details: [`domain-model.md`](domain-model.md).
 - Import (B7): Datenformat, Endpunkt oder Skript, Art des Zugriffsschutzes?
 - Festival-Entität (B5): gehört ein `Artist` zu einem Festival oder wird er geteilt?
 
-**Offene Fragen zur Vektorsuche (Phase 1):**
+**Offene Fragen zur Vektorsuche (Phase 1)** – die fachlichen stehen auch unter „Offene Punkte"
+in [`requirements.md`](requirements.md):
 
 - Welche Daten werden durchsucht? Aktuell haben `Artist`/`Stage` nur einen Namen – für eine
   sinnvolle semantische Suche fehlen beschreibende Textfelder (z. B. Genre, Beschreibung).
-- Welches Embedding-Modell (lokal oder über eine API) und damit welche Vektordimension?
+- Welches Embedding-Modell (lokal oder über eine API) und damit welche Vektordimension? Es
+  muss deutsche Anfragen verarbeiten (T4).
+- Umfang der Treffer: Höchstzahl und/oder Mindest-Ähnlichkeit? Gelten Tages-/Bühnenfilter,
+  erscheinen vergangene Acts?
 - Wann werden Embeddings erzeugt (im Seed-Skript, beim Speichern, separat)?
 - Wie wird getestet? Die Tests laufen gegen SQLite, das pgvector nicht unterstützt.
 
@@ -165,10 +174,10 @@ Details: [`domain-model.md`](domain-model.md).
 
 ## 8. Nächste geplante Schritte
 
-1. US-9 und US-10 (Favoriten, persönlicher Zeitplan) testen und reviewen.
-2. Vektorsuche Phase 1 vorbereiten: offene Fragen klären (Abschnitt 7), dann Requirements,
-   Domain Model und Architektur ergänzen und in kleinen Schritten umsetzen. Phase 2 (LLM/RAG)
-   erst nach Review von Phase 1.
+1. T-27 und T-28 (kleine Darstellungspunkte aus dem Review von US-9/US-10) umsetzen.
+2. Vektorsuche Phase 1 weiter nach [`roadmap.md`](roadmap.md): als Nächstes Schritt 3
+   (Suchinhalt festlegen), dann Domain Model und Architektur ergänzen und in kleinen Schritten
+   umsetzen. Phase 2 (LLM/RAG) erst nach Review von Phase 1.
 3. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
 4. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
    - mehrere Festivals + Festivalauswahl (C4, C5, F5, B5, B6) – zurückgestellt,

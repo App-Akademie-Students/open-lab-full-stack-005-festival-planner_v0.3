@@ -5,7 +5,7 @@
 
 1  Frontend-Zielbild – erledigt (2026-09-22): Suchbereich mit Mock-Ergebnissen in `static/`
 
-2  Requirement
+2  Requirement – erledigt (2026-09-23): C11, F11, B8, T4 in `requirements.md`
 
 3  Suchinhalt festlegen
 
