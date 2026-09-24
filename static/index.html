@@ -31,8 +31,7 @@
         </div>
       </div>
     </header>
-    <!-- Semantic search (vector search phase 1, step 1 "Frontend-Zielbild"): target UI only.
-         Results are mock data from app.js – no API call, no embeddings yet. -->
+    <!-- Semantic search (C11, F11): calls GET /api/search?q= via app.js. -->
     <section id="search" class="mb-6 rounded-lg bg-white p-4 shadow-sm" aria-labelledby="search-heading">
       <h2 id="search-heading" class="font-semibold text-gray-800">Acts suchen</h2>
       <p class="mt-1 text-sm text-gray-600">Beschreibe, worauf du Lust hast – gesucht wird nach Bedeutung, nicht nach genauen Begriffen.</p>
@@ -53,8 +52,9 @@
       </p>
       <div id="search-results" class="mt-4" aria-live="polite" hidden>
         <h3 id="search-results-heading" class="text-sm font-semibold text-gray-800"></h3>
-        <p id="search-mock-hint" class="mt-1 text-xs text-gray-500">Vorschau mit Beispieldaten – die echte Suche ist noch nicht angebunden.</p>
         <p id="search-empty" class="mt-2 text-sm text-gray-600" hidden>Bitte gib eine Suchanfrage ein.</p>
+        <p id="search-loading" class="mt-2 text-sm text-gray-600" hidden>Suche läuft…</p>
+        <p id="search-no-results" class="mt-2 text-sm text-gray-600" hidden>Keine passenden Acts gefunden.</p>
         <ol id="search-list" class="mt-2 divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200"></ol>
       </div>
     </section>

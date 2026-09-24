@@ -543,6 +543,154 @@ bestehende Tabellen nicht ändert und die Constraints sonst nie in Neon ankämen
 nebenbei den Hinweis zu den weiterlaufenden ID-Sequenzen aus Abschnitt 7. `python -m pytest`:
 36 passed. Aus den Abschnitten 6 bis 8 ist damit nichts mehr offen.
 
+## 10. Nachtrag – v0.3: US-11, Vektorsuche Phase 1 (Roadmap-Schritte 1–12), Stand 2026-09-24
+
+Review der gesamten semantischen Suche (kein LLM, siehe `CLAUDE.md` „Development Rule": Phase 2
+folgt erst nach diesem Review) gegen `doc/backlog.md` (US-11), `doc/requirements.md` (C11, F11,
+B8, B9, T1, T4), `doc/domain-model.md`, `doc/architecture.md` (Abschnitte „Semantische Suche"
+und „HTTP-API") und `doc/roadmap.md` (Phase 1, Schritte 1–12). Geprüfter Umfang:
+`app/models.py` (bereits in Abschnitt „Domain-/Datenmodell" grundgelegt, hier nur die Nutzung),
+`app/embeddings.py`, `app/crud.py`, `app/routers.py`, `static/app.js`, `static/index.html`,
+`tests/test_crud.py`, `tests/test_search_api.py`, `tests/test_embeddings.py`.
+
+Verifikation:
+
+- `python -m pytest -q`: **66 passed** (vorher 56; neu sind 5 Tests in `tests/test_crud.py` und
+  5 in `tests/test_search_api.py`), dieselben 2 bekannten Deprecation-Warnings.
+- Manuelle Live-Prüfung gegen Neon mit dem echten Embedding-Modell (kein Mock), in drei
+  Schritten während der Umsetzung: (1) Rohabfrage `Artist.embedding.cosine_distance(...)` direkt
+  per SQLAlchemy, 4 deutsche Anfragen; (2) `crud.search_acts()` mit denselben Anfragen, gleiches
+  Ergebnis; (3) der laufende `uvicorn`-Prozess über `TestClient` gegen Neon, `GET /api/search`
+  mit einer echten und zwei leeren/blank Anfragen – `200` mit sinnvollen Treffern bzw. `422`.
+  Dieser Review hat die drei Live-Prüfungen nicht wiederholt, sondern anhand der Ergebnisse aus
+  der Umsetzung (Roadmap-Schritte 9, 10, 11) nachvollzogen; die Rohdaten stehen dort.
+- `static/style.css` mit der Tailwind-CLI (v4.3.3) neu erzeugt und mit der eingecheckten Datei
+  verglichen (CRLF normalisiert): **eine Abweichung**, siehe Finding zu T-29 unten – die
+  Suchoberfläche selbst verwendet ausschließlich bereits vorhandene Klassen (z. B.
+  `min-w-0 flex-1 font-semibold break-words`, identisch zu `renderItem()`), es waren also keine
+  neuen Klassen nötig und dieser Schritt hätte auch ohne CSS-Neubau auskommen können.
+- Kein Live-Browsertest (siehe Finding zu Schritt 12 unten) – auf der Entwicklungsmaschine ist
+  kein Browser-Automatisierungstool verfügbar; ersatzweise wurde der laufende `uvicorn`-Prozess
+  per HTTP geprüft (`/`, `/app.js`, `/api/search` liefern die verdrahtete Fassung).
+
+### Erfüllung der Akzeptanzkriterien US-11
+
+- **Suchfeld, Ergebnisliste, Reihenfolge, fünf Felder je Treffer – erfüllt.** `runSearch()`
+  ruft `GET /api/search?q=` auf; die Antwort ist bereits nach Ähnlichkeit sortiert
+  (`crud.search_top_artists()`), `renderSearchResult()` zeigt Titel und – als eine Zeile – Tag,
+  Zeit und Bühne (wie beim persönlichen Zeitplan, US-10, dieselbe Formatierung `formatDay`).
+- **Durchsucht wird der Artist, Top 5, unabhängig von Filtern, auch vergangene Acts – erfüllt.**
+  `search_top_artists()` rankt ausschließlich über `Artist.embedding` (Name/Genre/Beschreibung),
+  `SEARCH_ARTIST_LIMIT = 5`; `acts_for_artists()` hat keinen Tages-/Bühnenfilter und keine
+  „nur zukünftige Acts"-Einschränkung (durch `tests/test_crud.py::test_acts_for_artists_includes_acts_already_ended`
+  belegt).
+- **Deutsche, umgangssprachliche Anfragen (T4) – erfüllt**, live gegen Neon mit vier deutschen
+  Anfragen geprüft (Roadmap-Schritt 9); Details siehe „Nicht offensichtlich" unten.
+- **Leere Anfrage zeigt Hinweis statt Suche – erfüllt.** `Query(min_length=1)` plus manuelles
+  Trimmen in `search_artist_ids()` (`app/routers.py`) weisen leere/nur-Leerzeichen-Anfragen mit
+  `422` zurück, bevor überhaupt embeddet wird; das Frontend ruft die API bei leerem Feld gar
+  nicht erst auf (`hasQuery`-Zweig in `runSearch()`).
+- **Keine Treffer zeigen einen Hinweis – erfüllt.** `search-no-results` in `index.html`,
+  gesteuert über `items.length` in `renderSearchResults()`.
+- **Kein LLM, keine generierte Antwort – erfüllt.** Die Antwort ist ausschließlich
+  `{ items: [...] }` aus vorhandenen Acts, keine Textgenerierung, keine neue Dependency
+  außerhalb der bereits in T1 gelisteten (`pgvector`, `sentence-transformers`).
+- **`GET /api/search?q=`, Ranking in PostgreSQL – erfüllt.** `crud.search_top_artists()` sortiert
+  per `ORDER BY embedding <=> :query_vector` (pgvector-Operator, über
+  `Column.cosine_distance()`), nicht in Python.
+
+### Findings
+
+- ✅ **Saubere Trennung des pgvector-Anteils für die Testbarkeit.** `search_top_artists()`
+  (braucht pgvector, nur manuell gegen Neon verifiziert) und `acts_for_artists()` (reiner Join,
+  automatisiert getestet) sind bewusst getrennte Funktionen; der Endpunkt nutzt dieselbe
+  Trennung über die austauschbare Dependency `search_artist_ids()` – dasselbe Muster wie
+  `festival_now`. Damit ist die in `requirements.md` offen gestellte Frage „Wie wird getestet?"
+  (SQLite kann kein `cosine_distance`) sauber beantwortet, ohne die bestehende
+  Teststrategie-Entscheidung (In-Memory-SQLite, nicht Neon) aufzuweichen.
+- ✅ **Kein Scope-Creep.** Keine neue Dependency, keine neue Schicht (`schemas.py`,
+  `services/`) – `search_artist_ids()` ist eine Funktion in `routers.py`, kein neues Modul. Die
+  Anforderungsfragen zu B7 (Import/Embedding beim Import) und Festival-Entität bleiben bewusst
+  unangetastet.
+- ✅ **Fehlerfall vor Modell-/DB-Zugriff abgefangen.** Eine leere oder reine
+  Leerzeichen-Anfrage scheitert an `search_artist_ids()`, bevor `embed_texts()` (PyTorch) oder
+  eine DB-Abfrage überhaupt aufgerufen werden – unnötige Modellaufrufe für ungültige Anfragen
+  sind ausgeschlossen.
+- ✅ **Race Condition konsistent mit T-23 behandelt.** `runSearch()` verwirft veraltete
+  Antworten über `latestSearchRequest`, exakt dasselbe Muster wie `latestProgramRequest` in
+  `loadProgram()`.
+- ⚠️ **Ladezustand nicht getestet, nur durch Code-Durchsicht geprüft.** `search-loading`
+  („Suche läuft…") ist wichtig, weil der erste `/api/search`-Aufruf pro Serverprozess das
+  Embedding-Modell lädt und mehrere Sekunden dauern kann (live gemessen: einige hundert
+  Millisekunden bis niedrige einstellige Sekunden beim Laden der Gewichte). Da es keine
+  JS-Tests gibt (bewusste Projektentscheidung) und kein Browsertest möglich war, ist dieser
+  Pfad nur durch Lesen von `runSearch()` verifiziert, nicht live beobachtet. Kein Blocker, da
+  das Muster exakt dem bereits geprüften `loadProgram()` folgt.
+- ⚠️ **Kein Live-Browsertest für Schritt 12 (Frontend-Anbindung).** Auf der
+  Entwicklungsmaschine ist kein Browser-Automatisierungstool (chromium-cli, Playwright)
+  installiert; laut `CLAUDE.md` soll vor Abschluss einer Frontend-Änderung „im Browser" getestet
+  werden. Ersatzweise wurde der reale `uvicorn`-Prozess (nicht `TestClient`) per HTTP geprüft:
+  ausgelieferte `index.html`/`app.js` enthalten die neue Suchlogik (keine
+  `MOCK_SEARCH_RESULTS`/`search-mock-hint` mehr), `GET /api/search` liefert live sinnvolle
+  Treffer. Ein echter Rendertest (Tab-Reihenfolge, Fokusrahmen, `aria-live`-Ankündigung,
+  optisches Layout bei 360 px) steht noch aus. Empfehlung: bei Gelegenheit einmal manuell im
+  Browser nachvollziehen, kein Blocker, da die HTTP-Prüfung Markup und Datenfluss bereits
+  bestätigt.
+- ⚠️ **`static/style.css` weicht in einer Regel von einem frischen Build ab (T-29).** Ein
+  frischer Build mit der Tailwind-CLI (v4.3.3) ist bis auf eine zusätzliche, ungenutzte Regel
+  `.fixed{position:fixed}` in der eingecheckten Datei identisch. Die Klasse `fixed` kommt in
+  `static/index.html`/`app.js` nirgends vor – vermutlich Rest einer inzwischen entfernten
+  Verwendung, vor dieser Phase entstanden (die Suchoberfläche selbst führt keine neuen Klassen
+  ein). Rein kosmetisch, keine funktionale Auswirkung. Empfehlung: `static/style.css` einmal
+  neu erzeugen.
+- ⚠️ **Dokumentations-Nit – `acts_for_artists()`-Docstring.** Der Docstring behauptet „Same
+  flat row shape as `list_program()`"; die Query selektiert zusätzlich `Act.artist_id` (fürs
+  Sortieren nach Rang). Das ist beabsichtigt und harmlos (die zusätzliche Spalte verlässt
+  `crud.py` nie), aber die Formulierung „same shape" ist nicht ganz präzise. Kein Blocker.
+- ✅ **Domain-Model-Frage aus Abschnitt „Offen" beantwortet.** `doc/domain-model.md` stellte die
+  Frage „Überspringt die Suche Artists ohne Embedding?" für Schritt 10 zurück; jetzt beantwortet
+  (still übersprungen) und im Dokument nachgezogen.
+- ✅ **`requirements.md` konsistent nachgezogen.** B8 nennt jetzt explizit Top 5, keine
+  Mindest-Ähnlichkeit, unabhängig von Filtern, inkl. vergangener Acts – die vorher offene Frage
+  dazu ist aus „Offene Punkte" entfernt, nicht nur beantwortet und liegen gelassen.
+- ✅ **Keine unbeabsichtigte Verhaltensänderung am bestehenden Programm/Favoriten.** `git status`
+  zeigt für dieses Review nur `app/crud.py`, `app/routers.py`, `static/app.js`,
+  `static/index.html` und die Doku als Code-relevante Änderungen; `/api/program`, `/api/stages`,
+  `/api/days` und die Favoriten-Logik sind unverändert (durch die weiterhin grünen, unveränderten
+  Tests in `test_api.py` bestätigt).
+
+Keine ❌-Blocker gefunden.
+
+### Nicht offensichtlich, fürs Protokoll
+
+- Der erste `/api/search`-Aufruf nach einem Neustart des Servers ist spürbar langsamer als alle
+  folgenden: `embeddings.get_model()` ist `lru_cache`-gebunden und lädt PyTorch/das Modell nur
+  beim ersten Aufruf. Das betrifft nur `/api/search` – `/api/program` etc. bleiben unberührt,
+  da sie `embeddings.py` nicht importieren, bevor eine Suche stattfindet.
+- Die Ähnlichkeits-Distanzen aus der Live-Prüfung (Roadmap-Schritt 9) liegen bei guten Treffern
+  etwa bei 0.20–0.35, bei schwächeren ab ca. 0.4 – ein Anhaltspunkt, falls später doch ein
+  Mindest-Ähnlichkeitswert gewünscht wird, aber bewusst keine harte Schwelle in dieser Version
+  (siehe B8-Entscheidung).
+- `search_artist_ids()` hängt sowohl von `Query(min_length=1)` als auch von einer eigenen
+  `strip()`-Prüfung ab: Ersteres fängt eine leere Anfrage (`q=`) ab, Letzteres eine, die nur aus
+  Leerzeichen besteht (`q=%20%20%20`), was `min_length=1` allein nicht abdecken würde. Beide
+  Fälle sind in `tests/test_search_api.py` einzeln abgedeckt.
+
+### Gesamturteil (Nachtrag US-11)
+
+**Freigeben mit (nicht blockierenden) Änderungswünschen.**
+
+Alle Akzeptanzkriterien von US-11 (C11, F11, B8, B9, T4) sind erfüllt, inklusive der schwierigen
+Testfrage, wie eine pgvector-Abfrage neben einer bewusst PostgreSQL-freien Testsuite verifiziert
+wird: Die Aufteilung in `search_top_artists()` (manuell gegen Neon verifiziert) und
+`acts_for_artists()` (automatisiert getestet) löst das sauber und ohne die bestehende
+Teststrategie zu verändern. Kein Scope-Creep, keine neue Dependency über die bereits in T1
+vorgesehenen hinaus, bestehende Funktionalität (Programm, Favoriten) unverändert. Die
+Änderungswünsche sind klein und lokal: eine veraltete CSS-Regel (T-29), ein fehlender
+Live-Browsertest (kein Automatisierungstool auf dieser Maschine verfügbar) und eine ungenaue
+Docstring-Formulierung. Damit ist Vektorsuche Phase 1 (Roadmap-Schritte 1–13) abgeschlossen;
+Phase 2 (LLM/RAG) kann laut `CLAUDE.md` „Development Rule" ab jetzt begonnen werden.
+
 ## 9. Nachtrag – v0.3: US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan), Stand 2026-09-23
 
 Review von `static/app.js`, `static/index.html` und `static/style.css` (nur Frontend, kein

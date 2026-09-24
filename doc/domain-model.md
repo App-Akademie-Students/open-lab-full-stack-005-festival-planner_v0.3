@@ -1,11 +1,13 @@
 # Domain Model
 
-Status: umgesetzt (v0.2), vereinbart am 2026-09-15, Stand 2026-09-23. Löst das bisherige
+Status: umgesetzt (v0.2), vereinbart am 2026-09-15, Stand 2026-09-24. Löst das bisherige
 Ein-Entitäten-Modell (`ProgramItem`) ab.
-**Erweiterung für die semantische Suche (Vektorsuche Phase 1):** `Artist` hat seit
+**Erweiterung für die semantische Suche (Vektorsuche Phase 1, umgesetzt):** `Artist` hat seit
 Roadmap-Schritt 7 zusätzlich `genre`, `description` und `embedding` (C11, B8, B9) – in Modell
 und Datenbank angelegt. Seit Schritt 8 erzeugt `python -m app.embeddings` die Embeddings aus
-`name`, `genre` und `description`; direkt nach dem Seed ist `embedding` leer.
+`name`, `genre` und `description`; direkt nach dem Seed ist `embedding` leer. Seit Schritt 10
+sucht `crud.search_top_artists()` darüber per pgvector; das Modell selbst ändert sich dadurch
+nicht mehr.
 
 Abgeleitet aus den Muss-Anforderungen in [`requirements.md`](requirements.md) sowie dem Ziel
 von Refactoring Phase 1: `Artist`, `Stage` und `Act` als getrennte Entitäten bei unveränderter
@@ -134,9 +136,11 @@ erDiagram
   Artists. Der Embedding-Text hat ein festes Format aus `name`, `genre` und `description`,
   die Vektoren sind auf Länge 1 normiert (Details in `architecture.md`, Abschnitt "Embeddings").
 
-**Offen (klärt sich mit Roadmap-Schritt 10):**
+**Entschieden (Roadmap-Schritt 10):**
 
-- Überspringt die Suche Artists ohne Embedding, oder ist das ein Fehler?
+- Die Suche überspringt Artists ohne Embedding stillschweigend (kein Fehler) –
+  `crud.search_top_artists()` filtert `WHERE embedding IS NOT NULL`, bevor sie nach Ähnlichkeit
+  sortiert.
 
 ## Was persistent gespeichert wird
 

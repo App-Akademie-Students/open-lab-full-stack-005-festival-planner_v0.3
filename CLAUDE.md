@@ -25,8 +25,15 @@ Darstellung mit Tailwind CSS) und US-8 (Programm nach Tag gruppieren und filtern
 T-26) sind alle erledigt. Ebenfalls umgesetzt: US-9 (Acts als Favorit merken, nur im Browser)
 und US-10 (persönlicher Zeitplan als Bereich „Meine Favoriten" über dem Programm), beide in
 `doc/review.md` (Abschnitt 9) ohne Blocker freigegeben; offen sind daraus T-27 und T-28.
-Die übrigen v0.3-Anforderungen sind noch nicht im Backlog; die Festival-Entität ist bis auf
-Weiteres zurückgestellt.
+Ebenfalls umgesetzt: US-11 (Acts semantisch suchen, kein LLM), in `doc/review.md`
+(Abschnitt 10) ohne Blocker freigegeben; offen daraus ist T-29. Die übrigen v0.3-Anforderungen
+(mehrere Festivals, Import, Offline) sind noch nicht im Backlog; die Festival-Entität ist bis
+auf Weiteres zurückgestellt.
+
+**Vektorsuche und LLM:** Phase 1 (semantische Suche, `GET /api/search?q=`, kein LLM) ist
+vollständig umgesetzt, getestet und reviewt (US-11, siehe oben) – Details und Einzelschritte in
+`doc/roadmap.md`. Phase 2 (LLM/RAG) darf laut „Development Rule" unten jetzt begonnen werden,
+ist aber noch nicht gestartet.
 
 Ab Phase 2 gilt eine neue Leitlinie für die Architektur: nicht mehr „so klein wie möglich"
 (MVP), sondern gut strukturiert und erweiterbar – die Struktur wächst Schritt für Schritt mit
@@ -86,6 +93,15 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   sie muss vorher in der Datenbank aktiviert sein (siehe „Configure database connection").
   Genre und Beschreibung im Seed sind Deutsch, passend zu deutschen Suchanfragen (T4).
   Unter SQLite (Tests) lässt sich die Spalte anlegen, aber keine Vektorsuche testen.
+* **Suche (Vektorsuche Phase 1, Roadmap-Schritt 10/11, B8):** Treffer sind die Acts der
+  5 ähnlichsten Artists (`SEARCH_ARTIST_LIMIT` in `app/crud.py`) – feste Höchstzahl statt einer
+  Mindest-Ähnlichkeit, weil sich ein sinnvoller Schwellenwert ohne Nutzungsdaten nicht seriös
+  festlegen lässt. Die Suche ist unabhängig vom Tages-/Bühnenfilter des Programms und zeigt
+  auch bereits vergangene Acts (wie der persönliche Zeitplan, US-10). `app/crud.py` trennt den
+  pgvector-Teil (`search_top_artists()`, nur manuell gegen Neon verifizierbar) vom reinen
+  Join (`acts_for_artists()`, automatisiert getestet); `app/routers.py` übernimmt dieselbe
+  Trennung über die per `Depends` austauschbare Funktion `search_artist_ids()` (wie
+  `festival_now`).
 * **Embeddings erzeugen (Roadmap-Schritt 8):** eigener Befehl `python -m app.embeddings`
   **nach** dem Seed, nicht im Seed (der bleibt schnell und ohne PyTorch). Er erzeugt immer die
   Embeddings aller Artists neu. Der Embedding-Text entsteht nur in
@@ -121,7 +137,7 @@ sobald ein konkreter Bedarf besteht (nicht spekulativ auf Vorrat):
 
 | Bereich | Ort |
 |---|---|
-| API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`) | `app/routers.py` |
+| API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`, `GET /api/search?q=`) | `app/routers.py` |
 | App-Objekt, Lifespan, bindet Router + `static/` ein | `app/main.py` |
 | Datenbank-Infrastruktur: Engine (PostgreSQL/Neon, `DATABASE_URL` aus `.env`), Session, `init_db()` | `app/db.py` |
 | ORM-Modelle `Artist` (inkl. `genre`, `description`, `embedding`), `Stage`, `Act`; `EMBEDDING_DIM` | `app/models.py` |

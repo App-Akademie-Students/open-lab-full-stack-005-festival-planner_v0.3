@@ -77,7 +77,7 @@ nicht-funktionale Rahmenbedingungen).
 | B5 | Das Datenmodell kennt Festivals (Name, Zeitraum); Bühnen und Acts gehören zu genau einem Festival. |
 | B6 | Die API liefert die Liste der Festivals und das Programm je Festival, optional zusätzlich nach Tag gefiltert. |
 | B7 | Über einen Backend-Zugang können Programmdaten (Festivals, Bühnen, Artists, Acts) importiert werden, ohne das Seed-Skript auszuführen. Der Zugang ist nicht für Besucher gedacht und gegen unberechtigte Nutzung geschützt. |
-| B8 | Die API nimmt eine Suchanfrage in natürlicher Sprache entgegen und liefert die passenden Acts, absteigend nach semantischer Ähnlichkeit zur Anfrage sortiert. Durchsucht wird der Artist: Die Ähnlichkeit wird über Vektor-Repräsentationen (Embeddings) der Anfrage und der Artist-Daten aus B9 (Name, Genre, Beschreibung) bestimmt; die Suche läuft in der PostgreSQL-Datenbank. Bühne und Zeiten fließen nicht in den Vergleich ein, sondern werden über die Acts des gefundenen Artists ergänzt – Treffer sind die Acts der passenden Artists. Es wird kein Text generiert (kein LLM) – das Ergebnis ist ausschließlich eine Liste vorhandener Acts. |
+| B8 | Die API nimmt eine Suchanfrage in natürlicher Sprache entgegen und liefert die passenden Acts, absteigend nach semantischer Ähnlichkeit zur Anfrage sortiert. Durchsucht wird der Artist: Die Ähnlichkeit wird über Vektor-Repräsentationen (Embeddings) der Anfrage und der Artist-Daten aus B9 (Name, Genre, Beschreibung) bestimmt; die Suche läuft in der PostgreSQL-Datenbank. Bühne und Zeiten fließen nicht in den Vergleich ein, sondern werden über die Acts des gefundenen Artists ergänzt – Treffer sind die Acts der passenden Artists. Gesucht werden die 5 ähnlichsten Artists (feste Höchstzahl, keine Mindest-Ähnlichkeit); alle ihre Acts erscheinen als Treffer, unabhängig von Tages- oder Bühnenfilter des Programms, auch bereits vergangene Acts. Es wird kein Text generiert (kein LLM) – das Ergebnis ist ausschließlich eine Liste vorhandener Acts. |
 | B9 | Zu jedem Artist werden neben dem Namen ein Genre und eine kurze Beschreibung gespeichert. Name, Genre und Beschreibung bilden zusammen den Suchinhalt der semantischen Suche (B8). |
 
 ### Tech / nicht-funktional
@@ -105,9 +105,6 @@ O2), ebenfalls ohne Umbau von `Act`. Details:
   jedes Festival eine eigene Zeitzone?
 - B7: Form des Imports (Datenformat, Endpunkt oder Skript) und Art des Zugriffsschutzes.
 - B5: Gehört ein `Artist` zu einem Festival oder wird er festivalübergreifend geteilt?
-- C11/F11/B8 – Umfang der Treffer: feste Höchstzahl, Mindest-Ähnlichkeit oder beides? Werden
-  Tages- und Bühnenfilter auf die Suche angewendet, und erscheinen bereits vorbei gelaufene
-  Acts? Wie erscheint ein Artist mit mehreren Acts (je Act ein Treffer oder zusammengefasst)?
 - B7/B8: Wie kommen importierte Artists zu ihrem Embedding (beim Import automatisch oder per
   separatem Befehl wie nach dem Seed)?
 
