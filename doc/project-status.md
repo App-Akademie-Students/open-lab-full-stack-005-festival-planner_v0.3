@@ -34,8 +34,9 @@ Ein minimalistischer Web-Planer für Festivalbesucher, der eine Frage beantworte
 Verbindung über `DATABASE_URL` in `.env` via `python-dotenv`), HTML + Vanilla JS (kein
 JS-Framework, kein JS-Build), Tailwind CSS v4 (Standalone-CLI, erzeugtes CSS ist eingecheckt).
 Tests: pytest + httpx (nur Dev), laufen gegen In-Memory-SQLite, nicht gegen Neon.
-Geplant für die Vektorsuche: PostgreSQL-Erweiterung pgvector plus ein Embedding-Modell
-(noch nicht ausgewählt).
+Für die Vektorsuche: PostgreSQL-Erweiterung pgvector (in Neon aktiviert, Python-Paket
+`pgvector`) und das Embedding-Modell `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+(384 Dimensionen, mehrsprachig), lokal über `sentence-transformers` (PyTorch).
 
 Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 
@@ -45,11 +46,12 @@ Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 | `app/routers.py` | API-Endpunkte und Pydantic-Antwortmodelle |
 | `app/crud.py` | Datenbank-Queries (Joins über `Artist`/`Stage`) |
 | `app/schedule.py` | Reine Business-Logik: Festival-Zeit, Festivaltag, Status „now"/„next" |
-| `app/models.py` | ORM-Modelle `Artist`, `Stage`, `Act` |
+| `app/models.py` | ORM-Modelle `Artist`, `Stage`, `Act`; `EMBEDDING_DIM = 384` |
 | `app/db.py` | Engine, Session, `init_db()`; bricht ohne `DATABASE_URL` mit klarer Meldung ab |
-| `app/seed.py` | Seed-Skript: vier Festivaltage ab heute, 3 Bühnen |
+| `app/seed.py` | Seed-Skript: vier Festivaltage ab heute, 3 Bühnen, Genre und Beschreibung je Artist |
+| `app/embeddings.py` | Embedding-Text und -Modell; `python -m app.embeddings` erzeugt die Embeddings aller Artists |
 | `static/` | `index.html`, `app.js`, erzeugtes `style.css` |
-| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py` (36 Tests) |
+| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py` (56 Tests) |
 
 **API** (flacher JSON-Vertrag, `title`/`stage` als Strings):
 
@@ -74,15 +76,19 @@ Details: [`architecture.md`](architecture.md).
 Drei Entitäten, drei Tabellen:
 
 ```text
-Artist (id, name)            1 ── n  Act
+Artist (id, name, genre, description, embedding)   1 ── n  Act
 Stage  (id, name unique)     1 ── n  Act
 Act    (id, artist_id FK, stage_id FK, starts_at, ends_at)
 ```
 
-- `ends_at > starts_at` und nicht leere Namen (`Artist`, `Stage`) sind zusätzlich DB-seitig
-  als `CheckConstraint` erzwungen.
+- `ends_at > starts_at`, nicht leere Namen (`Artist`, `Stage`) sowie nicht leere `genre` und
+  `description` (`Artist`) sind zusätzlich DB-seitig als `CheckConstraint` erzwungen.
 - Nicht gespeichert, sondern zur Laufzeit berechnet: Status „now"/„next", Sortierung, Tage.
 - Keine Entitäten für Festival, Tag, Nutzer oder Favoriten (Favoriten liegen nur im Browser).
+- **Vektorsuche:** `genre` (Text), `description` (Text) und `embedding` (`vector(384)`,
+  nullable) auf `Artist` sind angelegt. Das Embedding wird nur aus `name`, `genre` und
+  `description` erzeugt und muss bei jeder Änderung dieser Felder neu berechnet werden; es ist
+  für alle Artists gesetzt (per `python -m app.embeddings`). `Stage` und `Act` sind unverändert.
 
 Details: [`domain-model.md`](domain-model.md).
 
@@ -129,6 +135,20 @@ Details: [`domain-model.md`](domain-model.md).
   [`requirements.md`](requirements.md) – Acts per frei formulierter Anfrage finden, Treffer
   nach semantischer Ähnlichkeit sortiert, deutsche Anfragen unterstützt, kein LLM. Noch nicht
   implementiert und noch nicht als User Story im Backlog.
+  Roadmap-Schritt 3 (Suchinhalt) erledigt, festgehalten in B8/B9: Durchsucht wird der
+  **Artist**; ins Embedding gehen `name`, `genre` und `description`. Bühne, `starts_at` und
+  `ends_at` gehören nicht ins Embedding, sie kommen über die Acts des gefundenen Artists hinzu.
+  Roadmap-Schritt 4 (Domain Model) erledigt: `genre`, `description` und `embedding` auf
+  `Artist` in [`domain-model.md`](domain-model.md) dokumentiert.
+  Roadmap-Schritte 5 und 6 (manuell) erledigt: Modell
+  `paraphrase-multilingual-MiniLM-L12-v2` (384 Dimensionen) gewählt, pgvector in Neon aktiviert.
+  Roadmap-Schritt 7 erledigt: `genre`, `description` und `embedding` (`vector(384)`,
+  nullable) im SQLAlchemy-Modell `Artist` und in Neon angelegt (per Neu-Seeden); der Seed füllt
+  Genre und Beschreibung auf Deutsch.
+  Roadmap-Schritt 8 erledigt: `app/embeddings.py` erzeugt die Embeddings aus
+  `"<name>. Genre: <genre>. <description>"`, normiert auf Länge 1, als eigener Befehl
+  `python -m app.embeddings` nach dem Seed (immer für alle Artists). In Neon haben alle
+  44 Artists ein Embedding. Noch keine Suche.
   - *Phase 1 – semantische Vektorsuche, ohne LLM:*
     `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`.
     Ergebnis ist eine nach Ähnlichkeit sortierte Liste von Acts. Schritte: durchsuchbare
@@ -138,7 +158,7 @@ Details: [`domain-model.md`](domain-model.md).
     `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`.
     Die Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen
     erfinden, die nicht in den gefundenen Daten stehen.
-- Tests: `python -m pytest`, 37 grün (Stand 2026-09-23).
+- Tests: `python -m pytest`, 56 grün (Stand 2026-09-23).
 
 ## 7. Offene Entscheidungen und bekannte Probleme
 
@@ -153,13 +173,11 @@ Details: [`domain-model.md`](domain-model.md).
 **Offene Fragen zur Vektorsuche (Phase 1)** – die fachlichen stehen auch unter „Offene Punkte"
 in [`requirements.md`](requirements.md):
 
-- Welche Daten werden durchsucht? Aktuell haben `Artist`/`Stage` nur einen Namen – für eine
-  sinnvolle semantische Suche fehlen beschreibende Textfelder (z. B. Genre, Beschreibung).
-- Welches Embedding-Modell (lokal oder über eine API) und damit welche Vektordimension? Es
-  muss deutsche Anfragen verarbeiten (T4).
 - Umfang der Treffer: Höchstzahl und/oder Mindest-Ähnlichkeit? Gelten Tages-/Bühnenfilter,
-  erscheinen vergangene Acts?
-- Wann werden Embeddings erzeugt (im Seed-Skript, beim Speichern, separat)?
+  erscheinen vergangene Acts? Ein Treffer je Act oder je Artist, wenn ein Artist mehrere Acts
+  hat?
+- Überspringt die Suche Artists ohne Embedding (z. B. direkt nach einem Seed)? Wie bekommen
+  importierte Artists (B7) ihr Embedding?
 - Wie wird getestet? Die Tests laufen gegen SQLite, das pgvector nicht unterstützt.
 
 **Bekannte Einschränkungen:**
@@ -175,9 +193,9 @@ in [`requirements.md`](requirements.md):
 ## 8. Nächste geplante Schritte
 
 1. T-27 und T-28 (kleine Darstellungspunkte aus dem Review von US-9/US-10) umsetzen.
-2. Vektorsuche Phase 1 weiter nach [`roadmap.md`](roadmap.md): als Nächstes Schritt 3
-   (Suchinhalt festlegen), dann Domain Model und Architektur ergänzen und in kleinen Schritten
-   umsetzen. Phase 2 (LLM/RAG) erst nach Review von Phase 1.
+2. Vektorsuche Phase 1 weiter nach [`roadmap.md`](roadmap.md): als Nächstes Schritt 9
+   (Vektorsuche direkt in der Datenbank testen), dann Backend-Suche, Such-API und
+   Frontend-Anbindung. Phase 2 (LLM/RAG) erst nach Review von Phase 1.
 3. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
 4. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
    - mehrere Festivals + Festivalauswahl (C4, C5, F5, B5, B6) – zurückgestellt,

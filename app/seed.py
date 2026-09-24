@@ -74,6 +74,55 @@ SLOTS_DAY_4 = [
 # One entry per festival day, starting with the seed day.
 FESTIVAL_DAYS = [SLOTS_DAY_1, SLOTS_DAY_2, SLOTS_DAY_3, SLOTS_DAY_4]
 
+# artist name -> (genre, description). Written in German because visitors search in German
+# (T4); together with the name this is the text the semantic search compares against.
+ARTISTS = {
+    "Opener Band": ("Pop-Rock", "Gut gelaunte Gitarrenband, die das Festival mit eingängigen Mitsing-Refrains eröffnet."),
+    "Folk Trio": ("Folk", "Drei Stimmen, Akustikgitarre, Geige und Banjo – warme, erdige Lieder über Heimat und Unterwegssein."),
+    "DJ Sunrise": ("Deep House", "Sanfter, sonniger House mit weichen Bässen, perfekt zum Ankommen am frühen Nachmittag."),
+    "Rock Rebels": ("Hard Rock", "Laute Gitarrenriffs, treibendes Schlagzeug und viel Energie – Rock zum Mitschreien."),
+    "Acoustic Set": ("Akustik, Singer-Songwriter", "Reduziertes Set nur mit Gitarre und Stimme, ruhig und nah am Publikum."),
+    "Beat Collective": ("Hip-Hop, Instrumental Beats", "Kollektiv aus Produzenten, die live Beats aus Samples, Drums und Synthesizern bauen."),
+    "Indie Waves": ("Indie-Rock", "Verträumte Gitarren und melancholische Melodien, irgendwo zwischen Indie und Dream Pop."),
+    "String Quartet": ("Klassik, Crossover", "Streichquartett, das Pop- und Rocksongs klassisch neu arrangiert – elegant und ruhig."),
+    "Electro Pulse": ("Elektro, Synthpop", "Pulsierende Synthesizer und tanzbare Beats mit Anklängen an den Elektropop der Achtziger."),
+    "Headliner One": ("Alternative Rock", "Große Stadionhymnen, druckvoller Sound und eine aufwendige Lichtshow."),
+    "Chill Session": ("Chillout, Downtempo", "Entspannte elektronische Klänge, weiche Beats und viel Raum zum Durchatmen."),
+    "Bass Drop": ("Drum and Bass, Dubstep", "Schnelle Breakbeats und massive Bässe – laut, wild und zum Durchtanzen."),
+    "Sunset Groove": ("Soul, Funk", "Warme Grooves mit Bläsern und Hammondorgel für den Sonnenuntergang."),
+    "Headliner Two": ("Pop", "Chartstürmende Popband mit großen Refrains, Tänzern und Konfetti."),
+    "Morning Brass": ("Blasmusik, Brass", "Fröhliche Bläserbande, die mit Trompeten und Tuba wach macht."),
+    "Poetry Beats": ("Spoken Word, Hip-Hop", "Poetry-Slam trifft auf ruhige Beats – Texte zum Zuhören und Nachdenken."),
+    "Techno Garden": ("Techno", "Hypnotischer, gleichmäßiger Techno mit langen Spannungsbögen."),
+    "Garage Kings": ("Garage Rock", "Roher, ungeschliffener Rock 'n' Roll mit verzerrten Gitarren und viel Schweiß."),
+    "Harp & Voice": ("Neo-Klassik, Ambient", "Harfe und eine klare Frauenstimme – zart, ruhig und fast meditativ."),
+    "Dub Station": ("Dub, Reggae", "Tiefe Basslinien, Hall und Echo – entspannter Dub zum Mitwippen."),
+    "Stadium Heroes": ("Rock", "Klassischer Rock mit Gitarrensoli und Hymnen, bei denen das ganze Feld mitsingt."),
+    "Campfire Songs": ("Folk, Akustik", "Lagerfeuerlieder zum Mitsingen mit Gitarre und Mundharmonika, gemütlich und herzlich."),
+    "Closing Act": ("Indie-Pop", "Tanzbarer Indie-Pop mit Synthesizern, der den zweiten Tag feierlich beendet."),
+    "Night Owls": ("Techno, Minimal", "Dunkler, minimalistischer Techno für die lange Nacht im Zelt."),
+    "Sunday Swing": ("Swing, Jazz", "Big-Band-Swing zum Tanzen, beschwingt und nostalgisch."),
+    "Kids Choir": ("Kinderlieder, Chor", "Kinderchor mit fröhlichen Liedern für die ganze Familie."),
+    "Ambient Drift": ("Ambient", "Schwebende Klangflächen und leise Elektronik – ruhige Musik zum Treibenlassen."),
+    "Punk Parade": ("Punk", "Kurze, schnelle Songs mit viel Wut und Humor, laut und direkt."),
+    "Singer Songwriter": ("Singer-Songwriter", "Persönliche Lieder mit Gitarre und Klavier, leise und ehrlich."),
+    "House Nation": ("House", "Klassischer, energiegeladener House mit Piano-Akkorden und Vocals zum Durchtanzen."),
+    "Brass Explosion": ("Brass, Funk", "Eine Brassband mit Funk-Grooves, Trommeln und viel Show."),
+    "Jazz Corner": ("Jazz", "Kleines Jazztrio mit Kontrabass, Klavier und Besen am Schlagzeug – entspannt und verspielt."),
+    "Reggae Vibes": ("Reggae", "Sonniger Roots-Reggae mit positiven Texten und entspanntem Offbeat."),
+    "Main Event": ("Elektro-Pop", "Große Show mit elektronischem Pop, Lasern und Feuerwerk."),
+    "Moonlight Session": ("Ambient, Akustik", "Ruhige Klänge im Mondschein mit Gitarre, Cello und leiser Elektronik."),
+    "Afterhour Collective": ("Tech House", "Treibender Tech House bis in die frühen Morgenstunden."),
+    "Wake Up Yoga Beats": ("Downtempo, Weltmusik", "Sanfte Rhythmen und Klangschalen zum Aufwachen und Dehnen am Morgen."),
+    "Blues Brothers Tribute": ("Blues, Soul", "Tributeband mit Bläsern, Sonnenbrillen und den großen Blues- und Soul-Klassikern."),
+    "Lo-Fi Lounge": ("Lo-Fi Hip-Hop, Chillout", "Entspannte Lo-Fi-Beats mit knisternden Vinylsamples, ideal zum Abschalten."),
+    "Folk Revival": ("Folk", "Neu interpretierte alte Volkslieder mit Akkordeon, Geige und mehrstimmigem Gesang."),
+    "Garage Revival": ("Garage Rock, Surf", "Sechziger-Garage-Rock mit Surfgitarren und Orgel, schnell und tanzbar."),
+    "Drum Circle": ("Percussion, Weltmusik", "Trommelkreis zum Mitmachen mit Djemben und Rhythmen aus aller Welt."),
+    "Farewell Choir": ("Chor, Gospel", "Großer Chor mit Gospel und Pop-Arrangements als emotionaler Abschied."),
+    "Grand Finale": ("Rock, Pop", "Das große Abschlusskonzert mit Gästen, Hits und einem Feuerwerk zum Schluss."),
+}
+
 
 def build_acts(first_day: date) -> list[Act]:
     # One Stage row per distinct stage name, shared by all its acts (unique constraint).
@@ -90,9 +139,11 @@ def build_acts(first_day: date) -> list[Act]:
             ends_at = datetime.combine(day, time(eh, em))
             if ends_at <= starts_at:
                 ends_at += timedelta(days=1)
+            genre, description = ARTISTS[artist_name]
             acts.append(
                 Act(
-                    artist=Artist(name=artist_name),
+                    # No embedding yet: it is generated in a later step (roadmap step 8).
+                    artist=Artist(name=artist_name, genre=genre, description=description),
                     stage=stages[stage_name],
                     starts_at=starts_at,
                     ends_at=ends_at,

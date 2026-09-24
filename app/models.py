@@ -1,8 +1,14 @@
 """ORM models: Artist, Stage, Act (see doc/domain-model.md)."""
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, String
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db import Base
+
+# Length of Artist.embedding, fixed by the embedding model
+# sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2. Vectors of different models are
+# not comparable, so changing the model means a new dimension and re-embedding every artist.
+EMBEDDING_DIM = 384
 
 
 class Artist(Base):
@@ -10,11 +16,19 @@ class Artist(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    # name, genre and description together are the text the semantic search compares against.
+    genre = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    # Derived from name, genre and description, never edited by hand. Stays NULL until the
+    # embeddings are generated (vector search, roadmap step 8).
+    embedding = Column(Vector(EMBEDDING_DIM), nullable=True)
 
     acts = relationship("Act", back_populates="artist")
 
     __table_args__ = (
         CheckConstraint("trim(name) <> ''", name="ck_artists_name_not_empty"),
+        CheckConstraint("trim(genre) <> ''", name="ck_artists_genre_not_empty"),
+        CheckConstraint("trim(description) <> ''", name="ck_artists_description_not_empty"),
     )
 
 

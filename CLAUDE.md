@@ -40,6 +40,9 @@ Nach jeder Story/Aufgabe den Status in `doc/backlog.md` aktualisieren.
 * FastAPI, gestartet über uvicorn
 * SQLAlchemy
 * PostgreSQL (gehostet bei Neon), Treiber `psycopg` (v3)
+* pgvector (PostgreSQL-Erweiterung + Python-Paket `pgvector`) für die Vektorsuche;
+  Embedding-Modell `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 Dimensionen),
+  lokal über `sentence-transformers` (PyTorch)
 * HTML + Tailwind CSS (v4, CSS wird mit der Tailwind-CLI erzeugt – einziger Build-Schritt)
 * Vanilla JavaScript – kein JS-Framework, kein JS-Build
 
@@ -75,6 +78,21 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   es liegt nicht eingecheckt im Projektordner (siehe `.gitignore`). Nur Klassennamen aus
   `static/` werden erkannt; in `app.js` gesetzte Klassen müssen deshalb vollständig
   ausgeschrieben sein (kein Zusammensetzen wie `` `bg-${color}-50` ``).
+* **Embeddings (Vektorsuche Phase 1, Roadmap-Schritt 7):** `Artist` hat `genre`,
+  `description` (beide Pflicht, nicht leer) und `embedding` (`vector(384)`, nullable, bis die
+  Embeddings erzeugt sind). Die Dimension steht zentral als `EMBEDDING_DIM` in
+  `app/models.py` und ist an das Modell gebunden – ein Modellwechsel heißt neue Dimension und
+  alle Embeddings neu erzeugen. Die pgvector-Erweiterung legt der Code **nicht** selbst an;
+  sie muss vorher in der Datenbank aktiviert sein (siehe „Configure database connection").
+  Genre und Beschreibung im Seed sind Deutsch, passend zu deutschen Suchanfragen (T4).
+  Unter SQLite (Tests) lässt sich die Spalte anlegen, aber keine Vektorsuche testen.
+* **Embeddings erzeugen (Roadmap-Schritt 8):** eigener Befehl `python -m app.embeddings`
+  **nach** dem Seed, nicht im Seed (der bleibt schnell und ohne PyTorch). Er erzeugt immer die
+  Embeddings aller Artists neu. Der Embedding-Text entsteht nur in
+  `app/embeddings.py::artist_embedding_text()` (`"<name>. Genre: <genre>. <description>"`),
+  die Vektoren sind auf Länge 1 normiert. `sentence_transformers` wird erst beim Laden des
+  Modells importiert, damit App-Start und Tests PyTorch nicht laden. Tests nutzen einen
+  Fake-Encoder statt des echten Modells.
 * **Caching statischer Dateien:** `app/main.py` liefert `static/` mit `Cache-Control: no-cache`
   aus (`NoCacheStaticFiles`). Ohne den Header cacht der Browser `app.js`/`style.css`
   heuristisch und fragt sie nach einer Frontend-Änderung gar nicht erst neu an – dann läuft die
@@ -106,10 +124,11 @@ sobald ein konkreter Bedarf besteht (nicht spekulativ auf Vorrat):
 | API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`) | `app/routers.py` |
 | App-Objekt, Lifespan, bindet Router + `static/` ein | `app/main.py` |
 | Datenbank-Infrastruktur: Engine (PostgreSQL/Neon, `DATABASE_URL` aus `.env`), Session, `init_db()` | `app/db.py` |
-| ORM-Modelle `Artist`, `Stage`, `Act` | `app/models.py` |
+| ORM-Modelle `Artist` (inkl. `genre`, `description`, `embedding`), `Stage`, `Act`; `EMBEDDING_DIM` | `app/models.py` |
 | Datenbank-Queries (Joins über `Artist`/`Stage`) | `app/crud.py` |
 | Business-Logik: Festival-Zeit, Festivaltag, Status „now" / „next" (reine Funktionen, ohne DB/HTTP) | `app/schedule.py` |
 | Seed-Skript (vier Festivaltage ab dem heutigen Datum) | `app/seed.py` |
+| Embeddings: Embedding-Text, Modell, Embeddings aller Artists erzeugen | `app/embeddings.py` |
 | Frontend (HTML/Vanilla JS, erzeugtes `style.css`) | `static/` |
 | Tailwind-Quelle für `static/style.css` | `tailwind/input.css` |
 | Tests | `tests/` |
@@ -192,6 +211,13 @@ DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
 
 Verbindungsdaten kommen aus dem Neon-Projekt.
 
+Einmalig die pgvector-Erweiterung in der Datenbank aktivieren (in Neon im SQL-Editor), sonst
+scheitern App-Start und Seed an `type "vector" does not exist`:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
 ### Build CSS (nur bei Änderungen am Frontend)
 
 Einmalig das Tailwind-CLI-Standalone-Binary für die eigene Plattform von
@@ -214,6 +240,15 @@ python -m app.seed
 
 Löscht die Tabellen in der über `DATABASE_URL` konfigurierten PostgreSQL-Datenbank, legt sie
 neu an (so kommen auch Schemaänderungen wie neue Constraints an) und füllt das Programm für vier Tage ab dem heutigen Datum.
+
+### Generate embeddings
+
+```bash
+python -m app.embeddings
+```
+
+Nach jedem Seed ausführen: Erzeugt die Embeddings aller Artists neu (der Seed legt sie leer
+an). Beim ersten Lauf wird das Modell von Hugging Face heruntergeladen (ca. 470 MB).
 
 ### Start backend
 

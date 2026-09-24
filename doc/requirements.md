@@ -3,9 +3,10 @@
 Status: Entwurf v0.3, Stand 2026-09-23 – teilweise umgesetzt: Mehrtägigkeit mit Tagesfilter
 (C6, F6, Tages-Teil von B6), Tailwind CSS/responsive (C10, F4, F9), Favoriten merken (C7, F7)
 und persönlicher Zeitplan (C8, F8) über US-7 bis US-10. Mehrere Festivals, Import und
-Offline-Verfügbarkeit sind noch nicht umgesetzt. Neu aufgenommen und noch nicht umgesetzt:
-semantische Suche nach Acts (C11, F11, B8, T4 sowie Ergänzung von T1) – Phase 1 der
-Vektorsuche, ohne LLM.
+Offline-Verfügbarkeit sind noch nicht umgesetzt. Neu aufgenommen: semantische Suche nach Acts
+(C11, F11, B8, B9, T4 sowie Ergänzung von T1) – Phase 1 der Vektorsuche, ohne LLM. Davon
+umgesetzt ist bisher nur B9 (Genre und Beschreibung je Artist, gefüllt per Seed); die Suche
+selbst noch nicht.
 Vorherige bestätigte Stände sind eingefroren unter
 [`requirements-history/requirements-v0.2.md`](requirements-history/requirements-v0.2.md)
 (eintägiges Festival, ein Festival pro Instanz, kein Build-Tooling) und
@@ -76,13 +77,14 @@ nicht-funktionale Rahmenbedingungen).
 | B5 | Das Datenmodell kennt Festivals (Name, Zeitraum); Bühnen und Acts gehören zu genau einem Festival. |
 | B6 | Die API liefert die Liste der Festivals und das Programm je Festival, optional zusätzlich nach Tag gefiltert. |
 | B7 | Über einen Backend-Zugang können Programmdaten (Festivals, Bühnen, Artists, Acts) importiert werden, ohne das Seed-Skript auszuführen. Der Zugang ist nicht für Besucher gedacht und gegen unberechtigte Nutzung geschützt. |
-| B8 | Die API nimmt eine Suchanfrage in natürlicher Sprache entgegen und liefert die passenden Acts, absteigend nach semantischer Ähnlichkeit zur Anfrage sortiert. Die Ähnlichkeit wird über Vektor-Repräsentationen (Embeddings) von Anfrage und Act-Daten bestimmt, die Suche läuft in der PostgreSQL-Datenbank. Es wird kein Text generiert (kein LLM) – das Ergebnis ist ausschließlich eine Liste vorhandener Acts. |
+| B8 | Die API nimmt eine Suchanfrage in natürlicher Sprache entgegen und liefert die passenden Acts, absteigend nach semantischer Ähnlichkeit zur Anfrage sortiert. Durchsucht wird der Artist: Die Ähnlichkeit wird über Vektor-Repräsentationen (Embeddings) der Anfrage und der Artist-Daten aus B9 (Name, Genre, Beschreibung) bestimmt; die Suche läuft in der PostgreSQL-Datenbank. Bühne und Zeiten fließen nicht in den Vergleich ein, sondern werden über die Acts des gefundenen Artists ergänzt – Treffer sind die Acts der passenden Artists. Es wird kein Text generiert (kein LLM) – das Ergebnis ist ausschließlich eine Liste vorhandener Acts. |
+| B9 | Zu jedem Artist werden neben dem Namen ein Genre und eine kurze Beschreibung gespeichert. Name, Genre und Beschreibung bilden zusammen den Suchinhalt der semantischen Suche (B8). |
 
 ### Tech / nicht-funktional
 
 | #  | Anforderung |
 |----|-------------|
-| T1 | Stack ausschließlich: FastAPI, SQLAlchemy, PostgreSQL, HTML, Vanilla JS, Tailwind CSS – keine weiteren Frameworks oder Dependencies. Für den Datenbankzugriff und die Konfiguration kommen `psycopg` (v3) und `python-dotenv` hinzu. Tailwind CSS wird ausschließlich über die Tailwind-CLI zur Erzeugung des CSS verwendet. Für die semantische Suche (C11, B8) kommen die PostgreSQL-Erweiterung pgvector und ein Embedding-Modell hinzu (Auswahl offen, siehe „Offene Punkte"). Ausnahme: pytest + httpx als reine Dev-Dependencies für Tests. |
+| T1 | Stack ausschließlich: FastAPI, SQLAlchemy, PostgreSQL, HTML, Vanilla JS, Tailwind CSS – keine weiteren Frameworks oder Dependencies. Für den Datenbankzugriff und die Konfiguration kommen `psycopg` (v3) und `python-dotenv` hinzu. Tailwind CSS wird ausschließlich über die Tailwind-CLI zur Erzeugung des CSS verwendet. Für die semantische Suche (C11, B8) kommen die PostgreSQL-Erweiterung pgvector (mit dem Python-Paket `pgvector`) und das mehrsprachige Embedding-Modell `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` hinzu, lokal ausgeführt über das Paket `sentence-transformers` (mit PyTorch). Ausnahme: pytest + httpx als reine Dev-Dependencies für Tests. |
 | T2 | Die Anwendung ist lokal als ein Prozess startbar (uvicorn). |
 | T3 | Die „aktuelle Zeit" für F3 wird serverseitig in einer festen Festival-Zeitzone bestimmt: fester Offset UTC+02:00. |
 | T4 | Die semantische Suche unterstützt Suchanfragen auf Deutsch: Deutsch formulierte Anfragen, auch umgangssprachlich und ohne exakte Begriffe aus den Programmdaten, liefern passende Acts. |
@@ -103,14 +105,11 @@ O2), ebenfalls ohne Umbau von `Act`. Details:
   jedes Festival eine eigene Zeitzone?
 - B7: Form des Imports (Datenformat, Endpunkt oder Skript) und Art des Zugriffsschutzes.
 - B5: Gehört ein `Artist` zu einem Festival oder wird er festivalübergreifend geteilt?
-- C11/B8 – Suchinhalt: Welche Act-Daten werden durchsucht? Mit Titel und Bühnenname allein ist
-  eine semantische Suche kaum sinnvoll; nötig sind beschreibende Texte (z. B. Genre,
-  Beschreibung). Diese Daten braucht nur die Suche, eine Anzeige (O2) ist damit nicht gefordert.
-- T1/T4 – Embedding-Modell: lokal oder über eine API? Es muss deutsche Texte verarbeiten (T4).
 - C11/F11/B8 – Umfang der Treffer: feste Höchstzahl, Mindest-Ähnlichkeit oder beides? Werden
   Tages- und Bühnenfilter auf die Suche angewendet, und erscheinen bereits vorbei gelaufene
-  Acts?
-- B8: Wann werden die Embeddings der Act-Daten erzeugt (mit dem Seed, beim Import B7, separat)?
+  Acts? Wie erscheint ein Artist mit mehreren Acts (je Act ein Treffer oder zusammengefasst)?
+- B7/B8: Wie kommen importierte Artists zu ihrem Embedding (beim Import automatisch oder per
+  separatem Befehl wie nach dem Seed)?
 
 ## Optionale Anforderungen (später)
 
@@ -147,5 +146,8 @@ Betreiber: Programmdaten eines Festivals importieren.
 - Keine Künstler-Profile, Bilder, Social Media.
 - Keine Echtzeit-Updates/Push (Neuladen genügt).
 - Keine native App – nur eine simple Weboberfläche.
+- Keine Orts- oder Zeitangaben in der semantischen Suche: Bühne, Tag und Uhrzeit sind nicht
+  Teil des Suchinhalts (B8, B9), eine Anfrage wie „heute Abend auf der Hauptbühne" wird also
+  nicht über die Suche beantwortet.
 - Keine KI-generierten Antworten: Die Suche liefert nur vorhandene Acts, kein LLM formuliert
   Texte (LLM/RAG ist eine spätere, eigene Phase).

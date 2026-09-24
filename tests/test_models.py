@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
-from app.models import Act, Artist, Stage
+from app.models import EMBEDDING_DIM, Act, Artist, Stage
 
 
 @pytest.fixture
@@ -26,9 +26,13 @@ def db():
         engine.dispose()
 
 
+def build_artist(name="Rock Rebels", genre="Hard Rock", description="Laute Gitarren.") -> Artist:
+    return Artist(name=name, genre=genre, description=description)
+
+
 def build_act(starts_at: datetime, ends_at: datetime) -> Act:
     return Act(
-        artist=Artist(name="Rock Rebels"),
+        artist=build_artist(),
         stage=Stage(name="Hauptbühne"),
         starts_at=starts_at,
         ends_at=ends_at,
@@ -59,10 +63,38 @@ def test_act_rejects_end_equal_to_start(db):
 
 @pytest.mark.parametrize("name", ["", "   "])
 def test_artist_rejects_empty_name(db, name):
-    db.add(Artist(name=name))
+    db.add(build_artist(name=name))
 
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+@pytest.mark.parametrize("genre", ["", "   ", None])
+def test_artist_rejects_empty_genre(db, genre):
+    db.add(build_artist(genre=genre))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+@pytest.mark.parametrize("description", ["", "   ", None])
+def test_artist_rejects_empty_description(db, description):
+    db.add(build_artist(description=description))
+
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_artist_without_embedding_is_valid(db):
+    # Embeddings are generated in a later step, so an artist must be storable without one.
+    db.add(build_artist())
+    db.commit()
+
+    assert db.query(Artist).one().embedding is None
+
+
+def test_embedding_column_has_the_model_dimension():
+    assert Artist.__table__.c.embedding.type.dim == EMBEDDING_DIM == 384
 
 
 @pytest.mark.parametrize("name", ["", "   "])

@@ -34,6 +34,11 @@ def override_festival_now():
     return datetime(2026, 9, 11, 14, 0)
 
 
+def make_artist(name: str) -> Artist:
+    # genre and description are required, but irrelevant for the program API.
+    return Artist(name=name, genre="Testgenre", description="Testbeschreibung.")
+
+
 client = TestClient(app)
 
 
@@ -60,25 +65,25 @@ def reset_db():
     db.add_all(
         [
             Act(
-                artist=Artist(name="Rock Rebels"),
+                artist=make_artist("Rock Rebels"),
                 stage=hauptbuehne,
                 starts_at=datetime(2026, 9, 11, 13, 0),
                 ends_at=datetime(2026, 9, 11, 14, 30),
             ),
             Act(
-                artist=Artist(name="Folk Trio"),
+                artist=make_artist("Folk Trio"),
                 stage=waldbuehne,
                 starts_at=datetime(2026, 9, 11, 12, 0),
                 ends_at=datetime(2026, 9, 11, 13, 0),
             ),
             Act(
-                artist=Artist(name="DJ Sunrise"),
+                artist=make_artist("DJ Sunrise"),
                 stage=zeltbuehne,
                 starts_at=datetime(2026, 9, 11, 12, 0),
                 ends_at=datetime(2026, 9, 11, 13, 0),
             ),
             Act(
-                artist=Artist(name="Headliner"),
+                artist=make_artist("Headliner"),
                 stage=hauptbuehne,
                 starts_at=datetime(2026, 9, 11, 16, 0),
                 ends_at=datetime(2026, 9, 11, 18, 0),
@@ -145,13 +150,13 @@ def add_second_day():
     db.add_all(
         [
             Act(
-                artist=Artist(name="Morning Brass"),
+                artist=make_artist("Morning Brass"),
                 stage=hauptbuehne,
                 starts_at=datetime(2026, 9, 12, 12, 0),
                 ends_at=datetime(2026, 9, 12, 13, 0),
             ),
             Act(
-                artist=Artist(name="Night Owls"),
+                artist=make_artist("Night Owls"),
                 stage=zeltbuehne,
                 starts_at=datetime(2026, 9, 12, 23, 0),
                 ends_at=datetime(2026, 9, 13, 1, 0),

@@ -1,7 +1,11 @@
 # Domain Model
 
-Status: umgesetzt (v0.2), vereinbart am 2026-09-15, Stand 2026-09-18. Löst das bisherige
+Status: umgesetzt (v0.2), vereinbart am 2026-09-15, Stand 2026-09-23. Löst das bisherige
 Ein-Entitäten-Modell (`ProgramItem`) ab.
+**Erweiterung für die semantische Suche (Vektorsuche Phase 1):** `Artist` hat seit
+Roadmap-Schritt 7 zusätzlich `genre`, `description` und `embedding` (C11, B8, B9) – in Modell
+und Datenbank angelegt. Seit Schritt 8 erzeugt `python -m app.embeddings` die Embeddings aus
+`name`, `genre` und `description`; direkt nach dem Seed ist `embedding` leer.
 
 Abgeleitet aus den Muss-Anforderungen in [`requirements.md`](requirements.md) sowie dem Ziel
 von Refactoring Phase 1: `Artist`, `Stage` und `Act` als getrennte Entitäten bei unveränderter
@@ -20,6 +24,8 @@ liegen die Tabellen in PostgreSQL (Neon) statt in SQLite – am Schema ändert d
 | B4 – volle Zeitstempel | `Act.starts_at` / `Act.ends_at` als `datetime`, nicht nur `time` |
 | C1 – kein Login | keine User-/Auth-/Favoriten-Entität |
 | C4 – eine Instanz = ein Festival | „Festival" bleibt Konfiguration/Kontext, keine Entität |
+| B9 – Suchinhalt | `Artist` bekommt `genre` und `description`; zusammen mit `name` sind sie der durchsuchte Text |
+| C11 / B8 – semantische Suche | `Artist.embedding` speichert den Vektor zu `name` + `genre` + `description`; Bühne und Zeiten kommen über die Acts des Artists, nicht aus dem Embedding |
 
 ## Das Modell
 
@@ -34,7 +40,17 @@ vermeidet redundante Strings.
 | Attribut | Typ | Pflicht | Zweck / Regel |
 |---|---|---|---|
 | `id` | Integer, PK, autoincrement | ja | technische Identität |
-| `name` | String (nicht leer) | ja | Name des Acts, erscheint als Titel in der Liste (F1) |
+| `name` | String (nicht leer) | ja | Name des Acts, erscheint als Titel in der Liste (F1); Teil des Suchinhalts (B9) |
+| `genre` | String (nicht leer) | ja | Musikrichtung in Worten, z. B. „Ambient, Downtempo"; Teil des Suchinhalts (B9) |
+| `description` | Text (nicht leer) | ja | kurze Beschreibung von Stil und Stimmung, wenige Sätze; Teil des Suchinhalts (B9) |
+| `embedding` | Vektor mit 384 Dimensionen (`vector(384)`, pgvector) | nein – leer, bis es erzeugt wird | aus `name`, `genre` und `description` erzeugt; Grundlage der Ähnlichkeitssuche (B8) |
+
+`embedding` ist **abgeleitet**, keine eigenständige Fachinformation: Es wird ausschließlich aus
+`name`, `genre` und `description` berechnet und nie von Hand gepflegt. Bühne, `starts_at` und
+`ends_at` fließen bewusst nicht ein (siehe Scope-Abgrenzung in `requirements.md`).
+Es liegt direkt auf `Artist` statt in einer eigenen Tabelle, weil es genau ein Embedding pro
+Artist gibt (1:1). Eine eigene Tabelle lohnt sich erst, wenn z. B. mehrere Modelle oder
+mehrere Vektoren pro Artist nötig werden.
 
 ### `Stage`
 
@@ -63,6 +79,9 @@ erDiagram
     ARTIST {
         int id PK
         string name
+        string genre
+        text description
+        vector embedding "384 Dim., nullable"
     }
 
     STAGE {
@@ -95,6 +114,29 @@ erDiagram
 - Jeder `Act` hat genau einen `Artist` und genau eine `Stage` (Pflicht-FKs, kein optionaler Auftritt ohne Zuordnung).
 - Zeiten werden in einer festen Festival-Zeitzone interpretiert (siehe T3 in `requirements.md`).
 - Überlappungen auf derselben Bühne sind erlaubt – keine Validierung in der aktuellen Version.
+- `Artist.genre` und `Artist.description` sind nicht leer (B9: „zu jedem Artist") –
+  zusätzlich DB-seitig als `CheckConstraint` erzwungen.
+- `Artist.embedding` passt zum aktuellen Stand von `name`, `genre` und
+  `description`: Ändert sich eines der drei Felder, muss das Embedding neu erzeugt werden,
+  sonst findet die Suche den Artist mit veralteten Inhalten. Alle Embeddings stammen vom
+  selben Modell und haben dieselbe Dimension – Vektoren verschiedener Modelle sind nicht
+  vergleichbar.
+
+**Entschieden (Roadmap-Schritt 5 und 7):**
+
+- Modell und Dimension: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384
+  Dimensionen. Das Modell ist mehrsprachig, deutsche Anfragen und Texte passen also (T4).
+- `embedding` ist **optional** (nullable): Ein Artist kann ohne Embedding existieren, z. B.
+  direkt nach dem Seed, bis die Embeddings erzeugt sind.
+- Sprache von `genre`/`description`: Deutsch, wie die Suchanfragen der Besucher.
+
+- Erzeugung (Schritt 8): separat per `python -m app.embeddings` nach dem Seed, immer für alle
+  Artists. Der Embedding-Text hat ein festes Format aus `name`, `genre` und `description`,
+  die Vektoren sind auf Länge 1 normiert (Details in `architecture.md`, Abschnitt "Embeddings").
+
+**Offen (klärt sich mit Roadmap-Schritt 10):**
+
+- Überspringt die Suche Artists ohne Embedding, oder ist das ein Fehler?
 
 ## Was persistent gespeichert wird
 
@@ -104,7 +146,9 @@ erDiagram
 
 - „läuft jetzt" / „als Nächstes" – weiterhin zur Laufzeit berechnet, unabhängig vom Schema.
 - Sortierreihenfolge – Query (`ORDER BY starts_at, stage`).
-- Festival, Tag/Datum als eigene Entität, Genre, Beschreibung, Künstlerprofil.
+- Festival, Tag/Datum als eigene Entität, Künstlerprofil (Bilder, Links, Social Media).
+- Ähnlichkeitswert eines Treffers und Embedding der Suchanfrage – beides entsteht pro Anfrage
+  zur Laufzeit und wird nicht gespeichert.
 - Nutzer, Sessions, Favoriten, Merkzettel (C1 – kein Login). Favoriten gibt es seit US-9,
   aber nur im Browser des Besuchers (F7), nicht in der Datenbank.
 
@@ -122,5 +166,7 @@ erDiagram
 - `starts_at` / `ends_at` als volle Zeitstempel ⇒ der Tagesfilter (F6, US-8, umgesetzt) ist
   reine Query-/Anzeige-Logik ohne Schema-Umbau: Der Tag eines Acts ist sein Starttag und wird
   zur Laufzeit abgeleitet, es gibt keine eigene Tag-Entität.
-- Zusätzliche Attribute (z. B. Genre auf `Artist`, Kapazität auf `Stage`) sind jetzt durch die
-  Entitätstrennung ohne Umbau des `Act`-Schemas möglich.
+- Zusätzliche Attribute (z. B. Kapazität auf `Stage`) sind durch die Entitätstrennung ohne
+  Umbau des `Act`-Schemas möglich. Die geplanten Suchfelder `genre`, `description` und
+  `embedding` auf `Artist` nutzen genau diese Möglichkeit: `Act` und `Stage` bleiben
+  unverändert.
