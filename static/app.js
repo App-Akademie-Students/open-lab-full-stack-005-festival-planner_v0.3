@@ -200,8 +200,8 @@ const STATUS_BADGES = {
 // Filled vs. outlined star, so the state does not rely on color alone.
 const FAVORITE_BUTTON_CLASSES =
   "-my-2 flex size-11 shrink-0 items-center justify-center rounded-full text-2xl leading-none " +
-  "text-gray-400 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-indigo-500 " +
-  "aria-pressed:text-amber-500";
+  "text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-indigo-500 " +
+  "aria-pressed:text-amber-600";
 
 function renderItem(item) {
   const li = document.createElement("li");

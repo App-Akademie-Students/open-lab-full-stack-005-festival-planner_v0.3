@@ -1,6 +1,6 @@
 # Projektstatus – Festival Planner
 
-Stand: 2026-09-24. Kompakter Überblick über den aktuellen Stand, gedacht für externe
+Stand: 2026-09-25. Kompakter Überblick über den aktuellen Stand, gedacht für externe
 Gesprächspartner (z. B. ChatGPT), die das Projekt ohne Code und ohne alle Dokumente verstehen
 sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 
@@ -125,8 +125,8 @@ Details: [`domain-model.md`](domain-model.md).
 - **v0.3:** US-7 (Tailwind, responsive) und US-8 (Tage gruppieren/filtern) umgesetzt,
   reviewt und freigegeben ([`review.md`](review.md), Abschnitt 8); Review-Punkte daraus
   (T-22 bis T-26) alle erledigt. US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan)
-  umgesetzt, reviewt und freigegeben (Abschnitt 9); offen sind daraus zwei kleine
-  Darstellungspunkte (T-27 Aufklapp-Pfeil in Safari, T-28 Kontrast des Favoriten-Sterns).
+  umgesetzt, reviewt und freigegeben (Abschnitt 9); die Darstellungspunkte daraus (T-27
+  Aufklapp-Pfeil in Safari, T-28 Kontrast des Favoriten-Sterns) sind erledigt.
   Die übrigen v0.3-Anforderungen stehen im Entwurf von [`requirements.md`](requirements.md),
   sind aber noch nicht als Stories im Backlog. Die Festival-Entität ist bis auf Weiteres
   zurückgestellt.
@@ -141,8 +141,8 @@ Details: [`domain-model.md`](domain-model.md).
   Tages-/Bühnenfilter, auch vergangene Acts); Endpunkt `GET /api/search?q=`
   (`app/routers.py`); Frontend-Anbindung in `static/app.js` (Mock-Daten aus Schritt 1 entfernt).
   Review: [`review.md`](review.md) Abschnitt 10, „Freigeben mit nicht blockierenden
-  Änderungswünschen", keine Blocker; offen ist T-29 (veraltete, ungenutzte Regel in
-  `static/style.css`, kosmetisch) sowie ein noch ausstehender echter Live-Browsertest (auf
+  Änderungswünschen", keine Blocker; T-29 (veraltete, ungenutzte Regel in
+  `static/style.css`) ist erledigt, offen ist noch ein echter Live-Browsertest (auf
   dieser Maschine kein Browser-Automatisierungstool verfügbar, ersatzweise per HTTP gegen den
   echten Server geprüft).
   `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`, kein
@@ -181,9 +181,8 @@ Details: [`domain-model.md`](domain-model.md).
 
 ## 8. Nächste geplante Schritte
 
-1. T-27, T-28 (Darstellungspunkte aus dem Review von US-9/US-10) und T-29 (veraltete Regel in
-   `static/style.css`, aus dem Review von US-11) umsetzen; außerdem einmal die Suche live im
-   Browser prüfen, sobald ein Browser-Automatisierungstool verfügbar ist.
+1. Die Suche einmal live im Browser prüfen, sobald ein Browser-Automatisierungstool
+   verfügbar ist.
 2. Vektorsuche Phase 2 (LLM/RAG) nach [`roadmap.md`](roadmap.md) beginnen – frühestens jetzt
    erlaubt, da Phase 1 reviewt und freigegeben ist (siehe `CLAUDE.md`, „Development Rule").
 3. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).

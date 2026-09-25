@@ -62,7 +62,7 @@
          Native <details> accordion, collapsed by default (no "open" attribute). -->
     <details id="favorites" class="group mb-6 rounded-lg bg-white shadow-sm" hidden>
       <!-- flex hides the native marker, so the chevron is drawn here and turns when open -->
-      <summary class="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-4 font-semibold text-gray-800 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-indigo-500">
+      <summary class="flex [&::-webkit-details-marker]:hidden min-h-11 cursor-pointer items-center gap-2 rounded-lg px-4 font-semibold text-gray-800 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-indigo-500">
         <span aria-hidden="true" class="text-gray-500 transition-transform group-open:rotate-90">▸</span>
         Meine Favoriten <span id="favorites-count" class="font-normal text-gray-600"></span>
       </summary>

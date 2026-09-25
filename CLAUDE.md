@@ -24,9 +24,9 @@ Darstellung mit Tailwind CSS) und US-8 (Programm nach Tag gruppieren und filtern
 `doc/review.md` (Abschnitt 8) ohne Blocker freigegeben; die Änderungswünsche daraus (T-22 bis
 T-26) sind alle erledigt. Ebenfalls umgesetzt: US-9 (Acts als Favorit merken, nur im Browser)
 und US-10 (persönlicher Zeitplan als Bereich „Meine Favoriten" über dem Programm), beide in
-`doc/review.md` (Abschnitt 9) ohne Blocker freigegeben; offen sind daraus T-27 und T-28.
+`doc/review.md` (Abschnitt 9) ohne Blocker freigegeben; die Änderungswünsche daraus (T-27, T-28) sind erledigt.
 Ebenfalls umgesetzt: US-11 (Acts semantisch suchen, kein LLM), in `doc/review.md`
-(Abschnitt 10) ohne Blocker freigegeben; offen daraus ist T-29. Die übrigen v0.3-Anforderungen
+(Abschnitt 10) ohne Blocker freigegeben; der Änderungswunsch daraus (T-29) ist erledigt. Die übrigen v0.3-Anforderungen
 (mehrere Festivals, Import, Offline) sind noch nicht im Backlog; die Festival-Entität ist bis
 auf Weiteres zurückgestellt.
 

@@ -19,10 +19,10 @@ blockierenden Änderungswünschen", keine Blocker; die Änderungswünsche stehen
 unter „Offene Punkte aus dem Review" (alle erledigt).
 US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan) sind in [`review.md`](review.md),
 Abschnitt 9 (Stand 2026-09-23), ebenfalls freigegeben: „Freigeben mit nicht blockierenden
-Änderungswünschen", keine Blocker; offen sind daraus T-27 und T-28.
+Änderungswünschen", keine Blocker; die Änderungswünsche daraus (T-27, T-28) sind erledigt.
 US-11 (Acts semantisch suchen, Vektorsuche Phase 1) ist in [`review.md`](review.md),
 Abschnitt 10 (Stand 2026-09-24), freigegeben: „Freigeben mit nicht blockierenden
-Änderungswünschen", keine Blocker; offen daraus ist T-29.
+Änderungswünschen", keine Blocker; der Änderungswunsch daraus (T-29) ist erledigt.
 
 Abgeleitet aus den Muss-Anforderungen in [`requirements.md`](requirements.md).
 Technischer Rahmen: [`architecture.md`](architecture.md).
@@ -242,14 +242,14 @@ Aus Abschnitt 9 (v0.3, US-9/US-10):
 
 | ID | Titel | Status |
 |---|---|---|
-| T-27 | Nativen Aufklapp-Marker in Safari/iOS ausblenden: `[&::-webkit-details-marker]:hidden` auf `<summary>` von „Meine Favoriten", sonst steht neben dem eigenen Pfeil ▸ ein zweites Dreieck | offen |
-| T-28 | Kontrast des Favoriten-Sterns auf mind. 3 : 1 erhöhen (WCAG 1.4.11), z. B. `text-gray-500` / `aria-pressed:text-amber-600`; auch auf den farbigen Status-Zeilen prüfen | offen |
+| T-27 | Nativen Aufklapp-Marker in Safari/iOS ausblenden: `[&::-webkit-details-marker]:hidden` auf `<summary>` von „Meine Favoriten", sonst steht neben dem eigenen Pfeil ▸ ein zweites Dreieck | erledigt |
+| T-28 | Kontrast des Favoriten-Sterns auf mind. 3 : 1 erhöhen (WCAG 1.4.11), z. B. `text-gray-500` / `aria-pressed:text-amber-600`; auch auf den farbigen Status-Zeilen prüfen | erledigt (`text-gray-500` / `aria-pressed:text-amber-600`, rechnerisch ca. 4,8 : 1 bzw. ≥ 3,1 : 1 auf Weiß und den Status-Zeilen) |
 
 Aus Abschnitt 10 (v0.3, US-11, Vektorsuche Phase 1):
 
 | ID | Titel | Status |
 |---|---|---|
-| T-29 | `static/style.css` neu mit der Tailwind-CLI erzeugen: enthält eine ungenutzte Regel `.fixed{position:fixed}` (die einzige Abweichung von einem frischen Build), vermutlich Rest einer inzwischen entfernten Klasse; kosmetisch, kein Verhaltensunterschied | offen |
+| T-29 | `static/style.css` neu mit der Tailwind-CLI erzeugen: enthält eine ungenutzte Regel `.fixed{position:fixed}` (die einzige Abweichung von einem frischen Build), vermutlich Rest einer inzwischen entfernten Klasse; kosmetisch, kein Verhaltensunterschied | erledigt |
 
 **T-22/T-23 – Umsetzung (2026-09-21):** Text-Badge hinter dem Titel (`STATUS_BADGES` in
 `static/app.js`, Klassen vollständig ausgeschrieben, `static/style.css` neu erzeugt).
