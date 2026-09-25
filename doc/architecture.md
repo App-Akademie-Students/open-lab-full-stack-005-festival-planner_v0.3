@@ -1,6 +1,6 @@
 # Architektur & Projektstruktur
 
-Status: laufend, Stand 2026-09-18. Phase 1 (v0.2) hat die ursprüngliche Ein-Datei-Struktur
+Status: laufend, Stand 2026-09-23. Phase 1 (v0.2) hat die ursprüngliche Ein-Datei-Struktur
 (`db.py` mit Modell + Queries direkt in `main.py`) abgelöst; die Struktur wächst seitdem
 schrittweise mit den Anforderungen weiter, statt auf einem MVP-Stand zu verharren. Phase 2
 (v0.2) hat die Datenhaltung von SQLite auf PostgreSQL (Neon) umgestellt – ohne Änderung an
@@ -30,7 +30,8 @@ festival-planner/
 │   ├── crud.py            Queries: Bühnenliste, Tagesliste, Programmliste (Joins über Artist/Stage)
 │   ├── routers.py         API-Endpunkte: GET /api/program, GET /api/stages, GET /api/days
 │   ├── schedule.py        Business-Logik: Festival-Zeit, Festivaltag, „läuft jetzt" / „als Nächstes"
-│   └── seed.py            Seed-Skript: Tabellen neu anlegen, Artists/Stages und Acts einfügen
+│   ├── seed.py            Seed-Skript: Tabellen neu anlegen, Artists/Stages und Acts einfügen
+│   └── embeddings.py      Embedding-Text, Embedding-Modell, Embeddings aller Artists erzeugen (python -m app.embeddings)
 ├── static/
 │   ├── index.html         die einzige Seite
 │   ├── style.css          von der Tailwind-CLI erzeugt (eingecheckt, nicht von Hand ändern)
@@ -41,9 +42,10 @@ festival-planner/
 │   ├── test_schedule.py   Unit-Tests der Business-Logik (ohne DB, ohne HTTP)
 │   ├── test_models.py     DB-seitige Invarianten der Modelle (In-Memory-SQLite)
 │   ├── test_api.py        wenige API-Tests (TestClient + In-Memory-SQLite, nicht Neon)
-│   └── test_seed.py       Seed-Daten aus build_acts() (ohne DB): Tage, Acts über Mitternacht
+│   ├── test_seed.py       Seed-Daten aus build_acts() (ohne DB): Tage, Acts über Mitternacht
+│   └── test_embeddings.py Embedding-Text und Speichern der Embeddings (Fake-Encoder, In-Memory-SQLite)
 ├── .env                   DATABASE_URL (nicht eingecheckt)
-├── requirements.txt       Laufzeit: fastapi, uvicorn[standard], sqlalchemy, psycopg[binary], python-dotenv
+├── requirements.txt       Laufzeit: fastapi, uvicorn[standard], sqlalchemy, psycopg[binary], python-dotenv, pgvector, sentence-transformers
 └── requirements-dev.txt   -r requirements.txt + pytest + httpx
 ```
 
@@ -54,13 +56,14 @@ Datenbankdatei mehr. `.env` mit der `DATABASE_URL` ist per `.gitignore` von Git 
 
 | Datei | Verantwortung | Abhängig von |
 |---|---|---|
-| `app/models.py` | ORM-Modelle `Artist`, `Stage`, `Act` inkl. `relationship()` (siehe `domain-model.md`). | SQLAlchemy, `db.Base` |
+| `app/models.py` | ORM-Modelle `Artist`, `Stage`, `Act` inkl. `relationship()` (siehe `domain-model.md`); Konstante `EMBEDDING_DIM` (Länge von `Artist.embedding`). | SQLAlchemy, `pgvector`, `db.Base` |
 | `app/db.py` | `DATABASE_URL` aus `.env` laden und auf den `psycopg`-Treiber normalisieren, Engine, Session-Factory, FastAPI-Dependency `get_db()`, `Base`, `init_db()` (Tabellen anlegen). Reine Infrastruktur, kein Modell mehr. | SQLAlchemy, `psycopg`, `python-dotenv` |
-| `app/crud.py` | Queries als einfache Funktionen: Bühnenliste (sortiert), Tagesliste (Tage mit Acts, sortiert), Programmliste (`Act` mit Join auf `Artist`/`Stage`, sortiert, optional nach Bühne und Tag gefiltert). | `models`, `db` (Session), `schedule` (Tagesregel) |
-| `app/routers.py` | Die drei API-Endpunkte, Pydantic-Antwortmodelle; ruft `crud.py` für die Daten und `schedule.py` für den Status auf. | `crud`, `schedule`, FastAPI |
+| `app/crud.py` | Queries als einfache Funktionen: Bühnenliste (sortiert), Tagesliste (Tage mit Acts, sortiert), Programmliste (`Act` mit Join auf `Artist`/`Stage`, sortiert, optional nach Bühne und Tag gefiltert), semantische Suche (`search_top_artists()`, `acts_for_artists()`, `search_acts()`). | `models`, `db` (Session), `schedule` (Tagesregel) |
+| `app/routers.py` | Die vier API-Endpunkte, Pydantic-Antwortmodelle; ruft `crud.py` für die Daten, `schedule.py` für Status/Tag und `embeddings.py` für die Anfrage-Embeddings auf. | `crud`, `schedule`, `embeddings`, FastAPI |
 | `app/schedule.py` | `FESTIVAL_TZ`, `festival_now()`, die Tagesregel (`festival_day()`, `day_bounds()`) und reine Funktion(en), die Acts anhand eines übergebenen Zeitpunkts einen Status zuordnen. | nur `datetime` – **kein** FastAPI, **keine** Session |
 | `app/main.py` | App-Objekt, `init_db()` beim Start, bindet `routers.py` und `static/` ein. Enthält selbst keine Endpunkte mehr. | `db`, `routers` |
-| `app/seed.py` | `python -m app.seed`: Tabellen löschen und neu anlegen, Artists und Stages anlegen, Acts für vier Festivaltage (ab heute) auf 3 Bühnen mit FK-Referenzen einfügen. | `db`, `models`, `schedule` |
+| `app/seed.py` | `python -m app.seed`: Tabellen löschen und neu anlegen, Artists (mit Genre und Beschreibung, noch ohne Embedding) und Stages anlegen, Acts für vier Festivaltage (ab heute) auf 3 Bühnen mit FK-Referenzen einfügen. | `db`, `models`, `schedule` |
+| `app/embeddings.py` | `MODEL_NAME`, `artist_embedding_text()` (einziger Ort, an dem der Embedding-Text entsteht), `get_model()` (lädt das Modell einmal pro Prozess), `embed_texts()`, `embed_artists()`; `python -m app.embeddings` erzeugt die Embeddings aller Artists neu. | `crud`, `models`, `sentence-transformers` (erst beim Laden des Modells importiert) |
 | `static/*` | HTML + Vanilla JS, gestaltet mit Tailwind-Klassen; `style.css` ist erzeugt. Lädt Bühnen und Programm über die API, rendert die Liste, filtert per Dropdown, hebt Status hervor. | nur die HTTP-API |
 
 ## Wo liegt was?
@@ -167,6 +170,40 @@ Tages-Dropdown (US-8). Abgeleitet aus `Act.starts_at` – es gibt keine eigene T
 ["2026-09-18", "2026-09-19"]
 ```
 
+### `GET /api/search?q=<Anfrage>`
+
+Semantische Suche (C11, B8, F11, Roadmap-Schritt 11). `q` ist Pflicht und darf nach dem
+Trimmen nicht leer sein (sonst `422`, wie bei einem ungültigen `day`). Ruft
+`crud.search_top_artists()` (embeddet `q` mit `app/embeddings.py::embed_texts()`, rankt die
+5 ähnlichsten Artists per pgvector) und `crud.acts_for_artists()` auf (siehe „Semantische
+Suche" unten). Kein Tages-/Bühnenfilter, keine Statusberechnung, keine `now` im Vertrag –
+anders als `/api/program` ist das keine gefilterte Sicht auf das ganze Programm, sondern eine
+feste Trefferliste.
+
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "title": "Ambient Drift",
+      "stage": "Zeltbühne",
+      "day": "2026-09-25",
+      "starts_at": "2026-09-25T12:00:00",
+      "ends_at": "2026-09-25T13:00:00"
+    }
+  ]
+}
+```
+
+`day` kommt aus `schedule.festival_day(starts_at)` (F11 verlangt den Tag explizit je Treffer,
+anders als bei `/api/program`, wo das Frontend den Tag selbst aus `starts_at` gruppiert).
+
+Nicht offensichtlich: Die Ranking-Abfrage (`search_top_artists()`) steckt in einer eigenen,
+per `Depends` austauschbaren Funktion `search_artist_ids()` – genau wie `festival_now` –, nicht
+direkt im Endpunkt. Grund: Tests ersetzen sie, um weder das echte Embedding-Modell noch
+pgvector zu brauchen (beides unter der SQLite-Testdatenbank nicht verfügbar), siehe
+„Semantische Suche" und `tests/test_search_api.py`.
+
 ### `GET /`
 
 Liefert `static/index.html`; `static/` wird per `StaticFiles` eingebunden. Der Pfad
@@ -232,7 +269,18 @@ ohne Tricks testbar.
   `Base.metadata.create_all` in `init_db()` – beim App-Start und im Seed-Skript.
 - Datenintegrität: `ends_at > starts_at` ist als `CheckConstraint` auf `Act` DB-seitig
   erzwungen, nicht nur in der Business-Logik; ebenso `trim(name) <> ''` auf `Artist` und
-  `Stage` (T-18).
+  `Stage` (T-18) sowie `trim(genre) <> ''` und `trim(description) <> ''` auf `Artist`.
+- **pgvector (Vektorsuche, Roadmap-Schritt 7):** `Artist.embedding` hat den Typ
+  `vector(384)` aus der PostgreSQL-Erweiterung pgvector, in SQLAlchemy über
+  `pgvector.sqlalchemy.Vector(EMBEDDING_DIM)`. Die 384 Dimensionen legt das Embedding-Modell
+  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` fest; `EMBEDDING_DIM` steht
+  zentral in `models.py`. Die Spalte ist nullable: Direkt nach dem Seed ist sie leer, bis
+  `python -m app.embeddings` läuft (siehe Abschnitt "Embeddings"). Das Python-Paket `pgvector` (0.5) hat keine
+  weiteren Abhängigkeiten, auch kein `numpy`.
+  Nicht offensichtlich: Die Erweiterung muss in der Datenbank **vorher** aktiviert sein
+  (`CREATE EXTENSION IF NOT EXISTS vector;`, in Neon einmalig per SQL-Editor, Roadmap-Schritt 6).
+  Der Code legt sie bewusst nicht selbst an; fehlt sie, scheitern `init_db()` und der Seed mit
+  „type vector does not exist".
 - Keine Migrationen: Bei Schemaänderungen wird neu geseedet. Nicht offensichtlich:
   `create_all` legt nur fehlende Tabellen an und ändert bestehende nie. Deshalb löscht
   `seed.py` die Tabellen (`drop_all`) und legt sie neu an – nur so kommen z. B. neue
@@ -251,6 +299,69 @@ Gruppierung sind prüfbar. Je ein Act am zweiten und dritten Tag (23:00–01:00,
 die Endzeit eines Slots vor der Startzeit, setzt das Skript das Ende auf den Folgetag.
 Reihenfolge beim Einfügen: erst `Artist`- und `Stage`-Zeilen, danach `Act`-Zeilen mit den
 passenden FK-Referenzen.
+Genre und Beschreibung jedes Artists stehen in `ARTISTS` in `seed.py`, auf Deutsch, weil
+Besucher auf Deutsch suchen (T4). Sie sind der Suchinhalt der semantischen Suche (B9). Das
+`embedding` bleibt vorerst leer.
+
+## Embeddings
+
+Vektorsuche Phase 1, Roadmap-Schritt 8. Alles liegt in `app/embeddings.py`.
+
+- **Modell:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (`MODEL_NAME`), 384
+  Dimensionen, mehrsprachig. Es läuft lokal über `sentence-transformers` (PyTorch), es gibt
+  keinen externen API-Aufruf und keinen API-Key. Beim ersten Laden wird es von Hugging Face
+  heruntergeladen (ca. 470 MB) und im lokalen Cache abgelegt. `get_model()` prüft, dass das
+  Modell wirklich `EMBEDDING_DIM` Dimensionen liefert.
+- **Embedding-Text:** Er entsteht nur in `artist_embedding_text()`, immer im Format
+  `"<name>. Genre: <genre>. <description>"` (Felder ohne umgebende Leerzeichen). Bühne und
+  Zeiten gehören nicht dazu (B8). Wer das Format ändert, muss alle Artists neu einbetten.
+- **Normalisiert:** Die Vektoren werden auf Länge 1 normiert (`normalize_embeddings=True`).
+  Dann liefern Kosinus-Ähnlichkeit und Skalarprodukt dieselbe Reihenfolge, und die Suche kann
+  frei zwischen den pgvector-Operatoren `<=>` und `<#>` wählen.
+- **Wann:** als eigener Befehl `python -m app.embeddings`, **nach** `python -m app.seed`. Der
+  Befehl erzeugt die Embeddings **aller** Artists neu, nicht nur fehlende – ein vorhandenes
+  Embedding kann nach einer Änderung von Name, Genre oder Beschreibung veraltet sein. Bei
+  44 Artists dauert das etwa 10 Sekunden, überwiegend für das Laden von PyTorch und Modell.
+  Bewusst nicht im Seed: Der Seed bleibt schnell und kommt ohne PyTorch aus. Der Preis: Nach
+  jedem Seed sind die Embeddings leer, bis der Befehl gelaufen ist.
+- Nicht offensichtlich: `sentence_transformers` wird erst in `get_model()` importiert, nicht
+  am Modulanfang. Der Import von PyTorch dauert viele Sekunden; so bezahlen ihn weder der
+  App-Start noch die Tests, sondern nur Code, der wirklich einbettet.
+- `embed_artists()` bekommt den Encoder als Parameter (`encode`). Tests setzen dort einen
+  Fake ein und kommen ohne Modell, PyTorch und Download aus.
+
+## Semantische Suche
+
+Vektorsuche Phase 1, Roadmap-Schritt 10. Drei Funktionen in `app/crud.py`, absichtlich
+getrennt, weil nur ein Teil unter SQLite testbar ist:
+
+- **`search_top_artists(db, query_vector, limit=SEARCH_ARTIST_LIMIT)`** – die `limit` Artists
+  mit dem geringsten Kosinus-Abstand zum Anfrage-Vektor, per `Column.cosine_distance()`
+  (pgvector-Operator `<=>`). Artists ohne `embedding` werden ausgeschlossen.
+  `SEARCH_ARTIST_LIMIT = 5` (B8): feste Höchstzahl, keine Mindest-Ähnlichkeit – ein sinnvoller
+  Schwellenwert lässt sich ohne größere Nutzungsdaten nicht seriös festlegen, siehe der
+  manuelle Test in Roadmap-Schritt 9 (Distanzen ca. 0.20–0.35 bei guten, ca. 0.4+ bei
+  schwachen Treffern).
+  **Braucht PostgreSQL mit pgvector** – SQLite (Tests) kennt `cosine_distance()` nicht. Deshalb
+  gibt es dafür keinen automatisierten Test; verifiziert wird die Funktion manuell gegen Neon
+  (Wegwerf-Skript wie in Roadmap-Schritt 9, jetzt gegen die echte Funktion statt Rohabfrage).
+- **`acts_for_artists(db, artist_ids)`** – alle Acts der übergebenen Artists, in deren
+  Reihenfolge einsortiert (Rang aus `artist_ids`) und innerhalb eines Artists chronologisch.
+  Gleiche flache Zeilenform wie `list_program()`. Reiner Join, kein pgvector – deshalb unter
+  SQLite testbar, siehe `tests/test_crud.py`. Kein Tages-/Bühnenfilter und keine
+  „nur zukünftige Acts"-Einschränkung (B8, Entscheidung wie beim persönlichen Zeitplan,
+  US-10): die Suche zeigt immer alle Acts der gefundenen Artists.
+- **`search_acts(db, query_vector, limit=SEARCH_ARTIST_LIMIT)`** – verbindet beide Funktionen
+  in einem Aufruf; für das manuelle Verifizieren gegen Neon (Wegwerf-Skripte) und mögliche
+  spätere Aufrufer außerhalb der API. Der Such-Endpunkt (`GET /api/search`, Roadmap-Schritt 11)
+  ruft `search_top_artists()` und `acts_for_artists()` dagegen einzeln auf, aufgeteilt über die
+  austauschbare Dependency `search_artist_ids()` in `routers.py` – siehe dort und „HTTP-API".
+
+Damit ist auch die bisher offene Testfrage aus `requirements.md` beantwortet: Der
+pgvector-Teil (und das echte Embedding-Modell) bleiben ungetestet im automatisierten Sinne
+(dokumentierte, bewusste Lücke, wie die PostgreSQL-Infrastruktur unter „Datenbank"), der Rest
+der Suchlogik – Join/Flatten in `crud.py`, Validierung und Response-Form in `routers.py` – hat
+reguläre Tests.
 
 ## Frontend
 
@@ -295,6 +406,16 @@ passenden FK-Referenzen.
 - Mobil steht die Bühne in einer eigenen Zeile unter Zeit, Titel und Stern (`order-last
   basis-full`), ab `sm` wieder im Raster Zeit | Titel | Bühne | Stern.
 - Aktualisierung durch Neuladen der Seite – keine Echtzeit-Updates (Scope-Abgrenzung).
+- Semantische Suche (C11, F11, Roadmap-Schritt 12): Bereich „Acts suchen" über dem
+  persönlichen Zeitplan. Formular-Submit oder Klick auf die Beispielanfrage ruft
+  `GET /api/search?q=` auf (`runSearch()` in `app.js`); die frühere feste Mock-Liste aus
+  Schritt 1 ist entfernt. Zustände: leere Anfrage zeigt einen Hinweis statt zu suchen (F11),
+  während der Anfrage ein Ladehinweis (der erste Aufruf pro Serverprozess lädt das
+  Embedding-Modell und kann mehrere Sekunden dauern), keine Treffer zeigen einen eigenen
+  Hinweis (F11). Kein Ähnlichkeits-Score in der Anzeige – die API liefert keinen, nur die
+  Rangfolge. Wie bei `loadProgram()` verwirft ein Anfragezähler
+  (`latestSearchRequest`) eine veraltete Antwort, falls eine neuere Suche schon unterwegs ist
+  (gleiches Muster wie T-23).
 
 ## Tests
 
@@ -306,13 +427,34 @@ im Importpfad – daher keine `conftest.py` und keine `pytest.ini` nötig.
 - `tests/test_models.py` – die DB-seitige Invariante `ends_at > starts_at` (`CheckConstraint`):
   Ende nach Start wird angenommen, Ende vor Start und Ende gleich Start werden mit
   `IntegrityError` abgelehnt. Außerdem leere oder nur aus Leerzeichen bestehende Namen bei
-  `Artist` und `Stage`. Eigene Engine pro Test (Fixture), kein `TestClient`. Läuft unter
-  In-Memory-SQLite, weil SQLite CHECK-Constraints ebenfalls durchsetzt.
+  `Artist` und `Stage` sowie leere oder fehlende `genre`/`description` bei `Artist`; ein
+  Artist ohne `embedding` ist gültig, und die Spalte hat die Länge `EMBEDDING_DIM`. Eigene
+  Engine pro Test (Fixture), kein `TestClient`. Läuft unter In-Memory-SQLite, weil SQLite
+  CHECK-Constraints ebenfalls durchsetzt.
+  Nicht offensichtlich: Die `vector`-Spalte funktioniert unter SQLite nur deshalb, weil SQLite
+  jeden Typnamen in `CREATE TABLE` akzeptiert. Vektoroperationen (Ähnlichkeitssuche) lassen
+  sich so nicht testen – das braucht PostgreSQL mit pgvector.
 - `tests/test_seed.py` – die Seed-Daten aus `build_acts()`, ohne DB: ein Act pro Slot, vier
   aufeinanderfolgende Tage ab dem Starttag, `ends_at > starts_at` für alle Acts, ein Act über
   Mitternacht („Night Owls") endet am Folgetag und gehört zu seinem Starttag, eine `Stage` pro
   Bühnenname (sonst scheitert die Unique-Constraint). Wichtig, weil US-8 an genau diesen Daten
-  im Browser geprüft wird.
+  im Browser geprüft wird. Dazu: Jeder Artist hat Genre und Beschreibung, `ARTISTS` passt
+  genau zu den Slots, und es gibt noch keine Embeddings.
+- `tests/test_embeddings.py` – der Embedding-Text (alle drei Felder, gleiches Format, ohne
+  umgebende Leerzeichen) und `embed_artists()` mit Fake-Encoder: ein Vektor pro Artist in der
+  richtigen Reihenfolge, der Embedding-Text wird verwendet, veraltete Embeddings werden
+  ersetzt. Das echte Modell lädt kein Test.
+- `tests/test_crud.py` – `acts_for_artists()` (semantische Suche, Roadmap-Schritt 10):
+  Sortierung nach vorgegebenem Artist-Rang, chronologisch innerhalb eines Artists, andere
+  Artists werden ausgeschlossen, bereits vergangene Acts erscheinen trotzdem, leere Eingabe
+  liefert eine leere Liste. `search_top_artists()` braucht pgvector und ist hier bewusst nicht
+  getestet (siehe „Semantische Suche").
+- `tests/test_search_api.py` – `GET /api/search` (Roadmap-Schritt 11): fehlendes, leeres oder
+  nur aus Leerzeichen bestehendes `q` wird mit `422` abgelehnt, keine Treffer liefert eine
+  leere Liste, Treffer erscheinen in der vorgegebenen Artist-Reihenfolge mit korrektem
+  `day`/`starts_at`/`ends_at`. Ersetzt `search_artist_ids` per `dependency_overrides` (wie
+  `festival_now` in `test_api.py`), damit weder das echte Embedding-Modell noch pgvector
+  gebraucht werden.
 - `tests/test_api.py` – wenige Tests: Sortierung, Bühnen- und Tagesfilter (auch kombiniert),
   Bühnen- und Tagesliste, `status` im JSON (auch innerhalb eines gewählten Tages).
   Nutzt In-Memory-SQLite – bewusst **nicht** die PostgreSQL-Datenbank: die Tests laufen so
@@ -350,8 +492,9 @@ im Importpfad – daher keine `conftest.py` und keine `pytest.ini` nötig.
 - **Konflikterkennung** ist nicht Teil der bestätigten Anforderungen (nur O7, setzt Favoriten
   O4 voraus; laut Domain Model sind Überlappungen erlaubt). Käme sie hinzu, wäre sie eine
   weitere reine Funktion in `app/schedule.py` – erst nach Anpassung der Anforderungen.
-- **Weitere Attribute:** Genre auf `Artist`, Kapazität/Standort auf `Stage` – durch die
-  Entitätstrennung jetzt ohne Umbau von `Act` möglich (siehe `domain-model.md`).
+- **Weitere Attribute:** z. B. Kapazität/Standort auf `Stage` – durch die Entitätstrennung ohne
+  Umbau von `Act` möglich (siehe `domain-model.md`). Genre, Beschreibung und Embedding auf
+  `Artist` sind auf diesem Weg für die Vektorsuche hinzugekommen.
 - **Paket-Split (`app/api/`, `app/domain/`, `app/infra/`, …):** sinnvoll, sobald einzelne
   Module wachsen (z. B. mehrere Router-Dateien, mehrere Domain-Module) oder neue fachliche
   Bereiche dazukommen. Die heutige Verantwortlichkeiten-Tabelle oben ist bereits die

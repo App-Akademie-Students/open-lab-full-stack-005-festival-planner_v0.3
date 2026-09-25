@@ -542,3 +542,264 @@ vorgesehen: `seed.py` legt die Tabellen neu an (`drop_all` + `create_all`), weil
 bestehende Tabellen nicht ändert und die Constraints sonst nie in Neon ankämen. Das löst
 nebenbei den Hinweis zu den weiterlaufenden ID-Sequenzen aus Abschnitt 7. `python -m pytest`:
 36 passed. Aus den Abschnitten 6 bis 8 ist damit nichts mehr offen.
+
+## 10. Nachtrag – v0.3: US-11, Vektorsuche Phase 1 (Roadmap-Schritte 1–12), Stand 2026-09-24
+
+Review der gesamten semantischen Suche (kein LLM, siehe `CLAUDE.md` „Development Rule": Phase 2
+folgt erst nach diesem Review) gegen `doc/backlog.md` (US-11), `doc/requirements.md` (C11, F11,
+B8, B9, T1, T4), `doc/domain-model.md`, `doc/architecture.md` (Abschnitte „Semantische Suche"
+und „HTTP-API") und `doc/roadmap.md` (Phase 1, Schritte 1–12). Geprüfter Umfang:
+`app/models.py` (bereits in Abschnitt „Domain-/Datenmodell" grundgelegt, hier nur die Nutzung),
+`app/embeddings.py`, `app/crud.py`, `app/routers.py`, `static/app.js`, `static/index.html`,
+`tests/test_crud.py`, `tests/test_search_api.py`, `tests/test_embeddings.py`.
+
+Verifikation:
+
+- `python -m pytest -q`: **66 passed** (vorher 56; neu sind 5 Tests in `tests/test_crud.py` und
+  5 in `tests/test_search_api.py`), dieselben 2 bekannten Deprecation-Warnings.
+- Manuelle Live-Prüfung gegen Neon mit dem echten Embedding-Modell (kein Mock), in drei
+  Schritten während der Umsetzung: (1) Rohabfrage `Artist.embedding.cosine_distance(...)` direkt
+  per SQLAlchemy, 4 deutsche Anfragen; (2) `crud.search_acts()` mit denselben Anfragen, gleiches
+  Ergebnis; (3) der laufende `uvicorn`-Prozess über `TestClient` gegen Neon, `GET /api/search`
+  mit einer echten und zwei leeren/blank Anfragen – `200` mit sinnvollen Treffern bzw. `422`.
+  Dieser Review hat die drei Live-Prüfungen nicht wiederholt, sondern anhand der Ergebnisse aus
+  der Umsetzung (Roadmap-Schritte 9, 10, 11) nachvollzogen; die Rohdaten stehen dort.
+- `static/style.css` mit der Tailwind-CLI (v4.3.3) neu erzeugt und mit der eingecheckten Datei
+  verglichen (CRLF normalisiert): **eine Abweichung**, siehe Finding zu T-29 unten – die
+  Suchoberfläche selbst verwendet ausschließlich bereits vorhandene Klassen (z. B.
+  `min-w-0 flex-1 font-semibold break-words`, identisch zu `renderItem()`), es waren also keine
+  neuen Klassen nötig und dieser Schritt hätte auch ohne CSS-Neubau auskommen können.
+- Kein Live-Browsertest (siehe Finding zu Schritt 12 unten) – auf der Entwicklungsmaschine ist
+  kein Browser-Automatisierungstool verfügbar; ersatzweise wurde der laufende `uvicorn`-Prozess
+  per HTTP geprüft (`/`, `/app.js`, `/api/search` liefern die verdrahtete Fassung).
+
+### Erfüllung der Akzeptanzkriterien US-11
+
+- **Suchfeld, Ergebnisliste, Reihenfolge, fünf Felder je Treffer – erfüllt.** `runSearch()`
+  ruft `GET /api/search?q=` auf; die Antwort ist bereits nach Ähnlichkeit sortiert
+  (`crud.search_top_artists()`), `renderSearchResult()` zeigt Titel und – als eine Zeile – Tag,
+  Zeit und Bühne (wie beim persönlichen Zeitplan, US-10, dieselbe Formatierung `formatDay`).
+- **Durchsucht wird der Artist, Top 5, unabhängig von Filtern, auch vergangene Acts – erfüllt.**
+  `search_top_artists()` rankt ausschließlich über `Artist.embedding` (Name/Genre/Beschreibung),
+  `SEARCH_ARTIST_LIMIT = 5`; `acts_for_artists()` hat keinen Tages-/Bühnenfilter und keine
+  „nur zukünftige Acts"-Einschränkung (durch `tests/test_crud.py::test_acts_for_artists_includes_acts_already_ended`
+  belegt).
+- **Deutsche, umgangssprachliche Anfragen (T4) – erfüllt**, live gegen Neon mit vier deutschen
+  Anfragen geprüft (Roadmap-Schritt 9); Details siehe „Nicht offensichtlich" unten.
+- **Leere Anfrage zeigt Hinweis statt Suche – erfüllt.** `Query(min_length=1)` plus manuelles
+  Trimmen in `search_artist_ids()` (`app/routers.py`) weisen leere/nur-Leerzeichen-Anfragen mit
+  `422` zurück, bevor überhaupt embeddet wird; das Frontend ruft die API bei leerem Feld gar
+  nicht erst auf (`hasQuery`-Zweig in `runSearch()`).
+- **Keine Treffer zeigen einen Hinweis – erfüllt.** `search-no-results` in `index.html`,
+  gesteuert über `items.length` in `renderSearchResults()`.
+- **Kein LLM, keine generierte Antwort – erfüllt.** Die Antwort ist ausschließlich
+  `{ items: [...] }` aus vorhandenen Acts, keine Textgenerierung, keine neue Dependency
+  außerhalb der bereits in T1 gelisteten (`pgvector`, `sentence-transformers`).
+- **`GET /api/search?q=`, Ranking in PostgreSQL – erfüllt.** `crud.search_top_artists()` sortiert
+  per `ORDER BY embedding <=> :query_vector` (pgvector-Operator, über
+  `Column.cosine_distance()`), nicht in Python.
+
+### Findings
+
+- ✅ **Saubere Trennung des pgvector-Anteils für die Testbarkeit.** `search_top_artists()`
+  (braucht pgvector, nur manuell gegen Neon verifiziert) und `acts_for_artists()` (reiner Join,
+  automatisiert getestet) sind bewusst getrennte Funktionen; der Endpunkt nutzt dieselbe
+  Trennung über die austauschbare Dependency `search_artist_ids()` – dasselbe Muster wie
+  `festival_now`. Damit ist die in `requirements.md` offen gestellte Frage „Wie wird getestet?"
+  (SQLite kann kein `cosine_distance`) sauber beantwortet, ohne die bestehende
+  Teststrategie-Entscheidung (In-Memory-SQLite, nicht Neon) aufzuweichen.
+- ✅ **Kein Scope-Creep.** Keine neue Dependency, keine neue Schicht (`schemas.py`,
+  `services/`) – `search_artist_ids()` ist eine Funktion in `routers.py`, kein neues Modul. Die
+  Anforderungsfragen zu B7 (Import/Embedding beim Import) und Festival-Entität bleiben bewusst
+  unangetastet.
+- ✅ **Fehlerfall vor Modell-/DB-Zugriff abgefangen.** Eine leere oder reine
+  Leerzeichen-Anfrage scheitert an `search_artist_ids()`, bevor `embed_texts()` (PyTorch) oder
+  eine DB-Abfrage überhaupt aufgerufen werden – unnötige Modellaufrufe für ungültige Anfragen
+  sind ausgeschlossen.
+- ✅ **Race Condition konsistent mit T-23 behandelt.** `runSearch()` verwirft veraltete
+  Antworten über `latestSearchRequest`, exakt dasselbe Muster wie `latestProgramRequest` in
+  `loadProgram()`.
+- ⚠️ **Ladezustand nicht getestet, nur durch Code-Durchsicht geprüft.** `search-loading`
+  („Suche läuft…") ist wichtig, weil der erste `/api/search`-Aufruf pro Serverprozess das
+  Embedding-Modell lädt und mehrere Sekunden dauern kann (live gemessen: einige hundert
+  Millisekunden bis niedrige einstellige Sekunden beim Laden der Gewichte). Da es keine
+  JS-Tests gibt (bewusste Projektentscheidung) und kein Browsertest möglich war, ist dieser
+  Pfad nur durch Lesen von `runSearch()` verifiziert, nicht live beobachtet. Kein Blocker, da
+  das Muster exakt dem bereits geprüften `loadProgram()` folgt.
+- ⚠️ **Kein Live-Browsertest für Schritt 12 (Frontend-Anbindung).** Auf der
+  Entwicklungsmaschine ist kein Browser-Automatisierungstool (chromium-cli, Playwright)
+  installiert; laut `CLAUDE.md` soll vor Abschluss einer Frontend-Änderung „im Browser" getestet
+  werden. Ersatzweise wurde der reale `uvicorn`-Prozess (nicht `TestClient`) per HTTP geprüft:
+  ausgelieferte `index.html`/`app.js` enthalten die neue Suchlogik (keine
+  `MOCK_SEARCH_RESULTS`/`search-mock-hint` mehr), `GET /api/search` liefert live sinnvolle
+  Treffer. Ein echter Rendertest (Tab-Reihenfolge, Fokusrahmen, `aria-live`-Ankündigung,
+  optisches Layout bei 360 px) steht noch aus. Empfehlung: bei Gelegenheit einmal manuell im
+  Browser nachvollziehen, kein Blocker, da die HTTP-Prüfung Markup und Datenfluss bereits
+  bestätigt.
+- ⚠️ **`static/style.css` weicht in einer Regel von einem frischen Build ab (T-29).** Ein
+  frischer Build mit der Tailwind-CLI (v4.3.3) ist bis auf eine zusätzliche, ungenutzte Regel
+  `.fixed{position:fixed}` in der eingecheckten Datei identisch. Die Klasse `fixed` kommt in
+  `static/index.html`/`app.js` nirgends vor – vermutlich Rest einer inzwischen entfernten
+  Verwendung, vor dieser Phase entstanden (die Suchoberfläche selbst führt keine neuen Klassen
+  ein). Rein kosmetisch, keine funktionale Auswirkung. Empfehlung: `static/style.css` einmal
+  neu erzeugen.
+- ⚠️ **Dokumentations-Nit – `acts_for_artists()`-Docstring.** Der Docstring behauptet „Same
+  flat row shape as `list_program()`"; die Query selektiert zusätzlich `Act.artist_id` (fürs
+  Sortieren nach Rang). Das ist beabsichtigt und harmlos (die zusätzliche Spalte verlässt
+  `crud.py` nie), aber die Formulierung „same shape" ist nicht ganz präzise. Kein Blocker.
+- ✅ **Domain-Model-Frage aus Abschnitt „Offen" beantwortet.** `doc/domain-model.md` stellte die
+  Frage „Überspringt die Suche Artists ohne Embedding?" für Schritt 10 zurück; jetzt beantwortet
+  (still übersprungen) und im Dokument nachgezogen.
+- ✅ **`requirements.md` konsistent nachgezogen.** B8 nennt jetzt explizit Top 5, keine
+  Mindest-Ähnlichkeit, unabhängig von Filtern, inkl. vergangener Acts – die vorher offene Frage
+  dazu ist aus „Offene Punkte" entfernt, nicht nur beantwortet und liegen gelassen.
+- ✅ **Keine unbeabsichtigte Verhaltensänderung am bestehenden Programm/Favoriten.** `git status`
+  zeigt für dieses Review nur `app/crud.py`, `app/routers.py`, `static/app.js`,
+  `static/index.html` und die Doku als Code-relevante Änderungen; `/api/program`, `/api/stages`,
+  `/api/days` und die Favoriten-Logik sind unverändert (durch die weiterhin grünen, unveränderten
+  Tests in `test_api.py` bestätigt).
+
+Keine ❌-Blocker gefunden.
+
+### Nicht offensichtlich, fürs Protokoll
+
+- Der erste `/api/search`-Aufruf nach einem Neustart des Servers ist spürbar langsamer als alle
+  folgenden: `embeddings.get_model()` ist `lru_cache`-gebunden und lädt PyTorch/das Modell nur
+  beim ersten Aufruf. Das betrifft nur `/api/search` – `/api/program` etc. bleiben unberührt,
+  da sie `embeddings.py` nicht importieren, bevor eine Suche stattfindet.
+- Die Ähnlichkeits-Distanzen aus der Live-Prüfung (Roadmap-Schritt 9) liegen bei guten Treffern
+  etwa bei 0.20–0.35, bei schwächeren ab ca. 0.4 – ein Anhaltspunkt, falls später doch ein
+  Mindest-Ähnlichkeitswert gewünscht wird, aber bewusst keine harte Schwelle in dieser Version
+  (siehe B8-Entscheidung).
+- `search_artist_ids()` hängt sowohl von `Query(min_length=1)` als auch von einer eigenen
+  `strip()`-Prüfung ab: Ersteres fängt eine leere Anfrage (`q=`) ab, Letzteres eine, die nur aus
+  Leerzeichen besteht (`q=%20%20%20`), was `min_length=1` allein nicht abdecken würde. Beide
+  Fälle sind in `tests/test_search_api.py` einzeln abgedeckt.
+
+### Gesamturteil (Nachtrag US-11)
+
+**Freigeben mit (nicht blockierenden) Änderungswünschen.**
+
+Alle Akzeptanzkriterien von US-11 (C11, F11, B8, B9, T4) sind erfüllt, inklusive der schwierigen
+Testfrage, wie eine pgvector-Abfrage neben einer bewusst PostgreSQL-freien Testsuite verifiziert
+wird: Die Aufteilung in `search_top_artists()` (manuell gegen Neon verifiziert) und
+`acts_for_artists()` (automatisiert getestet) löst das sauber und ohne die bestehende
+Teststrategie zu verändern. Kein Scope-Creep, keine neue Dependency über die bereits in T1
+vorgesehenen hinaus, bestehende Funktionalität (Programm, Favoriten) unverändert. Die
+Änderungswünsche sind klein und lokal: eine veraltete CSS-Regel (T-29), ein fehlender
+Live-Browsertest (kein Automatisierungstool auf dieser Maschine verfügbar) und eine ungenaue
+Docstring-Formulierung. Damit ist Vektorsuche Phase 1 (Roadmap-Schritte 1–13) abgeschlossen;
+Phase 2 (LLM/RAG) kann laut `CLAUDE.md` „Development Rule" ab jetzt begonnen werden.
+
+## 9. Nachtrag – v0.3: US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan), Stand 2026-09-23
+
+Review von `static/app.js`, `static/index.html` und `static/style.css` (nur Frontend, kein
+Backend-Anteil) gegen die Akzeptanzkriterien in `doc/backlog.md`, `doc/requirements.md`
+(C7, C8, F7, F8), `doc/architecture.md` und `CLAUDE.md`. Der Mock-Suchbereich aus
+Roadmap-Schritt 1 der Vektorsuche ist nicht Teil dieses Reviews.
+
+Verifikation:
+
+- `python -m pytest -q`: **37 passed**, dieselben 2 bekannten Deprecation-Warnings. US-9/US-10
+  sind davon nicht abgedeckt, da es bewusst keine JS-Tests gibt (kein JS-Build, keine
+  JS-Test-Dependency).
+- `static/style.css` mit dem Tailwind-CLI-Binary (v4.3.3) neu erzeugt: **inhaltlich identisch**
+  zur eingecheckten Datei. Einziger Unterschied ist das Zeilenende nach dem Lizenzkommentar
+  (CRLF durch `core.autocrlf`). Alle in `app.js` gesetzten Klassen (u. a.
+  `aria-pressed:text-amber-500`, `sm:grid-cols-[7rem_1fr_10rem_2.75rem]`, `group-open:rotate-90`)
+  sind enthalten.
+- App gegen eine **Wegwerf-SQLite-DB** gestartet (Neon bleibt unverändert), per `python -m app.seed`
+  befüllt (44 Acts) und mit Headless-Chrome gerendert: Bereich „Meine Favoriten" sichtbar und
+  zugeklappt, Kopfzeile „(0)", Hinweis sichtbar, alle 44 Sterne `aria-pressed="false"`. Die
+  interaktiven Fälle (Markieren, Filterwechsel, Neuladen, blockierter Speicher, unbekannte `id`,
+  360 px) wurden bei der Umsetzung mit Headless-Chrome geprüft (siehe Backlog) und hier per
+  Code-Durchsicht nachvollzogen, nicht erneut live.
+
+### Erfüllung der Akzeptanzkriterien US-9
+
+- **Favoriten-Schalter pro Act, Tippen setzt/entfernt – erfüllt** (`renderFavoriteButton()`,
+  `toggleFavorite()`).
+- **Nicht nur über Farbe unterscheidbar, für Screenreader beschriftet – erfüllt.** ★/☆
+  unterscheiden sich in der Form; die Beschriftung bleibt fest („… als Favorit merken"), der
+  Zustand steckt in `aria-pressed`. Das ist das empfohlene Muster für Umschalt-Buttons – ein
+  wechselnder Text zusammen mit `aria-pressed` würde doppelt angesagt. Siehe aber ⚠️ Kontrast.
+- **Nur im Browser (`localStorage`), bleibt über Neuladen erhalten, kein Server – erfüllt.** Kein
+  `fetch` mit Favoriten, keine Backend-Änderung.
+- **Unabhängig von den Filtern – erfüllt.** `renderItem()` liest den Zustand bei jedem Rendern
+  neu aus dem `Set` `favorites`.
+- **Ohne Browser-Speicher läuft die Seite weiter – erfüllt.** Lesen und Schreiben in `try/catch`;
+  auch kaputter Inhalt unter dem Schlüssel (kein JSON, kein Array) führt zu einer leeren Menge
+  statt zu einem Fehler.
+- **Touch-Ziel mind. 44 px, 360 px ohne horizontales Scrollen – erfüllt** (`size-11`, Bühne auf
+  dem Smartphone in eigener Zeile).
+
+### Erfüllung der Akzeptanzkriterien US-10
+
+- **Kompakter Bereich über dem Programm, chronologisch, mit Tag, Zeit, Titel, Bühne – erfüllt.**
+  Die Reihenfolge kommt aus der API (`ORDER BY starts_at`), `filter()` erhält sie.
+- **Immer alle Favoriten, unabhängig vom Filter – erfüllt.** Einmaliger zusätzlicher Abruf von
+  `GET /api/program` ohne Filter (`loadAllActs()`), kein neuer Endpunkt.
+- **Hinweis ohne Favoriten – erfüllt** (live geprüft).
+- **Sofortige Aktualisierung beim Markieren – erfüllt.** `toggleFavorite()` ruft
+  `renderFavorites()` auf; wird vor dem Laden von `allActs` markiert, greift der `null`-Guard,
+  und `loadAllActs()` zeichnet danach den aktuellen Stand.
+- **Unbekannte `id`s werden ignoriert – erfüllt.** Gefiltert wird über die Acts, nicht über die
+  `id`s; auch die Anzahl in der Kopfzeile zählt nur gefundene Acts.
+- **Kompakt auf 360 px – erfüllt** (`max-h-60` mit internem Scrollen).
+- **Kein Backend-Umbau – erfüllt.**
+- **Akkordeon, beim Laden zugeklappt, Anzahl sichtbar, Tastatur/Screenreader, 44 px – erfüllt.**
+  Natives `<details>`/`<summary>` ohne `open` (live geprüft), `min-h-11`. Siehe aber ⚠️ Safari.
+
+### Findings
+
+- ⚠️ **Safari/iOS – doppelter Aufklapp-Pfeil (plausibel, nicht live geprüft).** `flex` auf
+  `<summary>` blendet in Chrome und Firefox den nativen Marker aus, deshalb zeichnet
+  `index.html` einen eigenen Pfeil ▸. WebKit rendert seinen Marker aber über das Pseudo-Element
+  `::-webkit-details-marker`, das von `display: flex` (zumindest in älteren Safari-Versionen)
+  nicht ausgeblendet wird – auf iPhones stünde dann ein zweites Dreieck vor dem eigenen Pfeil.
+  Gerade auf dem Festivalgelände ist das iPhone ein Hauptgerät. Abhilfe ohne neue Dependency:
+  `[&::-webkit-details-marker]:hidden` zusätzlich auf `<summary>`, CSS neu erzeugen. Ein Safari
+  zum Nachprüfen stand für dieses Review nicht zur Verfügung.
+- ⚠️ **UX/Barrierefreiheit – geringer Kontrast des Sterns.** Der leere Stern ☆ ist
+  `text-gray-400` auf Weiß (ca. 2,6 : 1), der gefüllte ★ `text-amber-500` (ca. 2 : 1 auf Weiß,
+  auf den bernsteinfarbenen „als Nächstes"-Zeilen noch weniger). WCAG 1.4.11 verlangt für
+  Bedienelemente mindestens 3 : 1. Der Zustand ist über die Form erkennbar (kein Verstoß gegen
+  „nur Farbe"), aber der Button selbst ist bei Sonnenlicht auf dem Gelände schwer zu sehen.
+  Vorschlag: z. B. `text-gray-500` und `aria-pressed:text-amber-600`, vollständig ausgeschrieben.
+- ⚠️ **Doku – `project-status.md` veraltet:** „36 Tests" (aktuell 37) und „US-9/US-10 noch nicht
+  reviewt". Mit diesem Review nachgezogen.
+- ✅ **Sicher gegen eingeschleustes HTML.** Titel und Bühne werden nur per `textContent` gesetzt,
+  `innerHTML` dient nur zum Leeren.
+- ✅ **Architektur- und Projektregeln eingehalten.** Nur Frontend, kein neuer Endpunkt, keine neue
+  Dependency, keine neue Datei; Klassen vollständig ausgeschrieben (Tailwind-Regel aus
+  `CLAUDE.md`). Entscheidungen (Act-`id` als Kennung, zusätzlicher ungefilterter Abruf,
+  `<details>`) sind in `architecture.md` und im Backlog dokumentiert; `requirements.md` (C7, C8,
+  F7, F8) und `domain-model.md` („Favoriten nur im Browser") passen zum Umsetzungsstand.
+
+Keine ❌-Blocker gefunden.
+
+### Nicht offensichtlich, fürs Protokoll
+
+- `loadAllActs()` hat – wie `loadProgram()` und `loadFilters()` – keine Fehlerbehandlung. Scheitert
+  der Abruf, bleibt „Meine Favoriten" versteckt (`hidden` bis zum ersten Rendern), und in der
+  Konsole steht eine unbehandelte Promise-Ablehnung. Konsistent mit dem Rest der Seite, daher
+  kein eigener Änderungswunsch; relevant wird es mit der Offline-Anforderung (C9, F10).
+- Gespeicherte `id`s ohne passenden Act bleiben dauerhaft im `localStorage` und werden nur beim
+  Anzeigen übersprungen. Harmlos, solange die Daten nur per Seed entstehen; mit einem Import
+  (B7) könnte eine alte `id` einen neuen, fremden Act als Favorit markieren (bekannte
+  Einschränkung, siehe `project-status.md`).
+- Zwei offene Tabs gleichen sich nicht ab (kein `storage`-Event); der zuletzt schreibende Tab
+  überschreibt die Favoriten des anderen. Nicht gefordert, nur zur Einordnung.
+- Die Liste im Akkordeon scrollt ab `max-h-60` intern. Chrome macht solche Bereiche selbst per
+  Tastatur fokussierbar, Safari nicht; da die Einträge keine Bedienelemente sind, betrifft das
+  nur Tastaturnutzer mit sehr vielen Favoriten in Safari.
+
+### Gesamturteil (Nachtrag US-9/US-10)
+
+**Freigeben mit (nicht blockierenden) Änderungswünschen.**
+
+Alle Akzeptanzkriterien von US-9 und US-10 sind erfüllt. Die Umsetzung bleibt wie vereinbart
+rein im Frontend, ist robust gegen fehlenden oder kaputten Browser-Speicher und gegen veraltete
+`id`s, und das eingecheckte CSS entspricht einem frischen Build. Die Änderungswünsche betreffen
+die Darstellung (Aufklapp-Pfeil in Safari, Kontrast des Sterns) und stehen im Backlog als T-27
+und T-28. Der veraltete Stand in `project-status.md` ist mit diesem Review korrigiert.

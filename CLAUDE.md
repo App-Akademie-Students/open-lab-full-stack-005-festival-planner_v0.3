@@ -23,9 +23,17 @@ v0.3 ist als Entwurf in `doc/requirements.md` aufgenommen. Davon umgesetzt: US-7
 Darstellung mit Tailwind CSS) und US-8 (Programm nach Tag gruppieren und filtern), beide in
 `doc/review.md` (Abschnitt 8) ohne Blocker freigegeben; die Änderungswünsche daraus (T-22 bis
 T-26) sind alle erledigt. Ebenfalls umgesetzt: US-9 (Acts als Favorit merken, nur im Browser)
-und US-10 (persönlicher Zeitplan als Bereich „Meine Favoriten" über dem Programm).
-Die übrigen v0.3-Anforderungen sind noch nicht im Backlog; die Festival-Entität ist bis auf
-Weiteres zurückgestellt.
+und US-10 (persönlicher Zeitplan als Bereich „Meine Favoriten" über dem Programm), beide in
+`doc/review.md` (Abschnitt 9) ohne Blocker freigegeben; offen sind daraus T-27 und T-28.
+Ebenfalls umgesetzt: US-11 (Acts semantisch suchen, kein LLM), in `doc/review.md`
+(Abschnitt 10) ohne Blocker freigegeben; offen daraus ist T-29. Die übrigen v0.3-Anforderungen
+(mehrere Festivals, Import, Offline) sind noch nicht im Backlog; die Festival-Entität ist bis
+auf Weiteres zurückgestellt.
+
+**Vektorsuche und LLM:** Phase 1 (semantische Suche, `GET /api/search?q=`, kein LLM) ist
+vollständig umgesetzt, getestet und reviewt (US-11, siehe oben) – Details und Einzelschritte in
+`doc/roadmap.md`. Phase 2 (LLM/RAG) darf laut „Development Rule" unten jetzt begonnen werden,
+ist aber noch nicht gestartet.
 
 Ab Phase 2 gilt eine neue Leitlinie für die Architektur: nicht mehr „so klein wie möglich"
 (MVP), sondern gut strukturiert und erweiterbar – die Struktur wächst Schritt für Schritt mit
@@ -39,6 +47,9 @@ Nach jeder Story/Aufgabe den Status in `doc/backlog.md` aktualisieren.
 * FastAPI, gestartet über uvicorn
 * SQLAlchemy
 * PostgreSQL (gehostet bei Neon), Treiber `psycopg` (v3)
+* pgvector (PostgreSQL-Erweiterung + Python-Paket `pgvector`) für die Vektorsuche;
+  Embedding-Modell `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 Dimensionen),
+  lokal über `sentence-transformers` (PyTorch)
 * HTML + Tailwind CSS (v4, CSS wird mit der Tailwind-CLI erzeugt – einziger Build-Schritt)
 * Vanilla JavaScript – kein JS-Framework, kein JS-Build
 
@@ -74,6 +85,30 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   es liegt nicht eingecheckt im Projektordner (siehe `.gitignore`). Nur Klassennamen aus
   `static/` werden erkannt; in `app.js` gesetzte Klassen müssen deshalb vollständig
   ausgeschrieben sein (kein Zusammensetzen wie `` `bg-${color}-50` ``).
+* **Embeddings (Vektorsuche Phase 1, Roadmap-Schritt 7):** `Artist` hat `genre`,
+  `description` (beide Pflicht, nicht leer) und `embedding` (`vector(384)`, nullable, bis die
+  Embeddings erzeugt sind). Die Dimension steht zentral als `EMBEDDING_DIM` in
+  `app/models.py` und ist an das Modell gebunden – ein Modellwechsel heißt neue Dimension und
+  alle Embeddings neu erzeugen. Die pgvector-Erweiterung legt der Code **nicht** selbst an;
+  sie muss vorher in der Datenbank aktiviert sein (siehe „Configure database connection").
+  Genre und Beschreibung im Seed sind Deutsch, passend zu deutschen Suchanfragen (T4).
+  Unter SQLite (Tests) lässt sich die Spalte anlegen, aber keine Vektorsuche testen.
+* **Suche (Vektorsuche Phase 1, Roadmap-Schritt 10/11, B8):** Treffer sind die Acts der
+  5 ähnlichsten Artists (`SEARCH_ARTIST_LIMIT` in `app/crud.py`) – feste Höchstzahl statt einer
+  Mindest-Ähnlichkeit, weil sich ein sinnvoller Schwellenwert ohne Nutzungsdaten nicht seriös
+  festlegen lässt. Die Suche ist unabhängig vom Tages-/Bühnenfilter des Programms und zeigt
+  auch bereits vergangene Acts (wie der persönliche Zeitplan, US-10). `app/crud.py` trennt den
+  pgvector-Teil (`search_top_artists()`, nur manuell gegen Neon verifizierbar) vom reinen
+  Join (`acts_for_artists()`, automatisiert getestet); `app/routers.py` übernimmt dieselbe
+  Trennung über die per `Depends` austauschbare Funktion `search_artist_ids()` (wie
+  `festival_now`).
+* **Embeddings erzeugen (Roadmap-Schritt 8):** eigener Befehl `python -m app.embeddings`
+  **nach** dem Seed, nicht im Seed (der bleibt schnell und ohne PyTorch). Er erzeugt immer die
+  Embeddings aller Artists neu. Der Embedding-Text entsteht nur in
+  `app/embeddings.py::artist_embedding_text()` (`"<name>. Genre: <genre>. <description>"`),
+  die Vektoren sind auf Länge 1 normiert. `sentence_transformers` wird erst beim Laden des
+  Modells importiert, damit App-Start und Tests PyTorch nicht laden. Tests nutzen einen
+  Fake-Encoder statt des echten Modells.
 * **Caching statischer Dateien:** `app/main.py` liefert `static/` mit `Cache-Control: no-cache`
   aus (`NoCacheStaticFiles`). Ohne den Header cacht der Browser `app.js`/`style.css`
   heuristisch und fragt sie nach einer Frontend-Änderung gar nicht erst neu an – dann läuft die
@@ -102,13 +137,14 @@ sobald ein konkreter Bedarf besteht (nicht spekulativ auf Vorrat):
 
 | Bereich | Ort |
 |---|---|
-| API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`) | `app/routers.py` |
+| API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`, `GET /api/search?q=`) | `app/routers.py` |
 | App-Objekt, Lifespan, bindet Router + `static/` ein | `app/main.py` |
 | Datenbank-Infrastruktur: Engine (PostgreSQL/Neon, `DATABASE_URL` aus `.env`), Session, `init_db()` | `app/db.py` |
-| ORM-Modelle `Artist`, `Stage`, `Act` | `app/models.py` |
+| ORM-Modelle `Artist` (inkl. `genre`, `description`, `embedding`), `Stage`, `Act`; `EMBEDDING_DIM` | `app/models.py` |
 | Datenbank-Queries (Joins über `Artist`/`Stage`) | `app/crud.py` |
 | Business-Logik: Festival-Zeit, Festivaltag, Status „now" / „next" (reine Funktionen, ohne DB/HTTP) | `app/schedule.py` |
 | Seed-Skript (vier Festivaltage ab dem heutigen Datum) | `app/seed.py` |
+| Embeddings: Embedding-Text, Modell, Embeddings aller Artists erzeugen | `app/embeddings.py` |
 | Frontend (HTML/Vanilla JS, erzeugtes `style.css`) | `static/` |
 | Tailwind-Quelle für `static/style.css` | `tailwind/input.css` |
 | Tests | `tests/` |
@@ -191,6 +227,13 @@ DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
 
 Verbindungsdaten kommen aus dem Neon-Projekt.
 
+Einmalig die pgvector-Erweiterung in der Datenbank aktivieren (in Neon im SQL-Editor), sonst
+scheitern App-Start und Seed an `type "vector" does not exist`:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
 ### Build CSS (nur bei Änderungen am Frontend)
 
 Einmalig das Tailwind-CLI-Standalone-Binary für die eigene Plattform von
@@ -213,6 +256,15 @@ python -m app.seed
 
 Löscht die Tabellen in der über `DATABASE_URL` konfigurierten PostgreSQL-Datenbank, legt sie
 neu an (so kommen auch Schemaänderungen wie neue Constraints an) und füllt das Programm für vier Tage ab dem heutigen Datum.
+
+### Generate embeddings
+
+```bash
+python -m app.embeddings
+```
+
+Nach jedem Seed ausführen: Erzeugt die Embeddings aller Artists neu (der Seed legt sie leer
+an). Beim ersten Lauf wird das Modell von Hugging Face heruntergeladen (ca. 470 MB).
 
 ### Start backend
 

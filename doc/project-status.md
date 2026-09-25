@@ -1,6 +1,6 @@
 # Projektstatus – Festival Planner
 
-Stand: 2026-09-22. Kompakter Überblick über den aktuellen Stand, gedacht für externe
+Stand: 2026-09-24. Kompakter Überblick über den aktuellen Stand, gedacht für externe
 Gesprächspartner (z. B. ChatGPT), die das Projekt ohne Code und ohne alle Dokumente verstehen
 sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 
@@ -8,9 +8,9 @@ sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 
 - **Name:** Festival Planner
 - **Version/Phase:** v0.1 und v0.2 umgesetzt und reviewt. **v0.3 in Arbeit** – die
-  Anforderungen liegen als Entwurf vor, vier neue Stories sind umgesetzt (US-7 bis US-10).
-- **Neue Entwicklungsphase:** semantische Vektorsuche (Phase 1), danach LLM/RAG (Phase 2) –
-  siehe Abschnitt 6.
+  Anforderungen liegen als Entwurf vor, fünf neue Stories sind umgesetzt (US-7 bis US-11).
+- **Neue Entwicklungsphase:** semantische Vektorsuche **(Phase 1 abgeschlossen und reviewt,
+  US-11)**, danach LLM/RAG (Phase 2, noch nicht begonnen) – siehe Abschnitt 6.
 - Lernprojekt: schrittweise Entwicklung mit Claude, Dokumentation auf Deutsch, Code auf
   Englisch.
 
@@ -34,8 +34,9 @@ Ein minimalistischer Web-Planer für Festivalbesucher, der eine Frage beantworte
 Verbindung über `DATABASE_URL` in `.env` via `python-dotenv`), HTML + Vanilla JS (kein
 JS-Framework, kein JS-Build), Tailwind CSS v4 (Standalone-CLI, erzeugtes CSS ist eingecheckt).
 Tests: pytest + httpx (nur Dev), laufen gegen In-Memory-SQLite, nicht gegen Neon.
-Geplant für die Vektorsuche: PostgreSQL-Erweiterung pgvector plus ein Embedding-Modell
-(noch nicht ausgewählt).
+Für die Vektorsuche: PostgreSQL-Erweiterung pgvector (in Neon aktiviert, Python-Paket
+`pgvector`) und das Embedding-Modell `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+(384 Dimensionen, mehrsprachig), lokal über `sentence-transformers` (PyTorch).
 
 Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 
@@ -45,17 +46,20 @@ Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 | `app/routers.py` | API-Endpunkte und Pydantic-Antwortmodelle |
 | `app/crud.py` | Datenbank-Queries (Joins über `Artist`/`Stage`) |
 | `app/schedule.py` | Reine Business-Logik: Festival-Zeit, Festivaltag, Status „now"/„next" |
-| `app/models.py` | ORM-Modelle `Artist`, `Stage`, `Act` |
+| `app/models.py` | ORM-Modelle `Artist`, `Stage`, `Act`; `EMBEDDING_DIM = 384` |
 | `app/db.py` | Engine, Session, `init_db()`; bricht ohne `DATABASE_URL` mit klarer Meldung ab |
-| `app/seed.py` | Seed-Skript: vier Festivaltage ab heute, 3 Bühnen |
+| `app/seed.py` | Seed-Skript: vier Festivaltage ab heute, 3 Bühnen, Genre und Beschreibung je Artist |
+| `app/embeddings.py` | Embedding-Text und -Modell; `python -m app.embeddings` erzeugt die Embeddings aller Artists |
 | `static/` | `index.html`, `app.js`, erzeugtes `style.css` |
-| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py` (36 Tests) |
+| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py`, `test_crud.py`, `test_search_api.py` (66 Tests) |
 
 **API** (flacher JSON-Vertrag, `title`/`stage` als Strings):
 
 - `GET /api/program?stage=&day=YYYY-MM-DD` → `{ now, items: [{id, title, stage, starts_at, ends_at, status}] }`
 - `GET /api/stages` → Bühnennamen, alphabetisch
 - `GET /api/days` → Tage mit Acts, chronologisch
+- `GET /api/search?q=` → semantische Suche (B8/F11):
+  `{ items: [{id, title, stage, day, starts_at, ends_at}] }`, `q` Pflicht und nicht leer
 
 **Wichtige Regeln:**
 
@@ -74,15 +78,19 @@ Details: [`architecture.md`](architecture.md).
 Drei Entitäten, drei Tabellen:
 
 ```text
-Artist (id, name)            1 ── n  Act
+Artist (id, name, genre, description, embedding)   1 ── n  Act
 Stage  (id, name unique)     1 ── n  Act
 Act    (id, artist_id FK, stage_id FK, starts_at, ends_at)
 ```
 
-- `ends_at > starts_at` und nicht leere Namen (`Artist`, `Stage`) sind zusätzlich DB-seitig
-  als `CheckConstraint` erzwungen.
+- `ends_at > starts_at`, nicht leere Namen (`Artist`, `Stage`) sowie nicht leere `genre` und
+  `description` (`Artist`) sind zusätzlich DB-seitig als `CheckConstraint` erzwungen.
 - Nicht gespeichert, sondern zur Laufzeit berechnet: Status „now"/„next", Sortierung, Tage.
 - Keine Entitäten für Festival, Tag, Nutzer oder Favoriten (Favoriten liegen nur im Browser).
+- **Vektorsuche:** `genre` (Text), `description` (Text) und `embedding` (`vector(384)`,
+  nullable) auf `Artist` sind angelegt. Das Embedding wird nur aus `name`, `genre` und
+  `description` erzeugt und muss bei jeder Änderung dieser Felder neu berechnet werden; es ist
+  für alle Artists gesetzt (per `python -m app.embeddings`). `Stage` und `Act` sind unverändert.
 
 Details: [`domain-model.md`](domain-model.md).
 
@@ -101,6 +109,8 @@ Details: [`domain-model.md`](domain-model.md).
   chronologisch mit Tag, Zeit, Titel und Bühne, unabhängig vom Filter; Hinweis, solange
   keine Favoriten gemerkt sind (US-10).
 - Responsive Oberfläche mit Tailwind CSS, ab 360 px ohne horizontales Scrollen (US-6, US-7).
+- Semantische Suche nach Acts in eigenen Worten (Suchbereich über den Favoriten), sortiert
+  nach Ähnlichkeit, unterstützt deutsche Anfragen, kein LLM (C11, F11, B8, B9, T4; US-11).
 - Seed-Skript mit vier Festivaltagen ab heute, inkl. paralleler Acts und Acts über
   Mitternacht (US-1).
 - Datenhaltung in PostgreSQL (Neon) mit Verbindungs-Check gegen Neons Idle-Suspend.
@@ -115,25 +125,33 @@ Details: [`domain-model.md`](domain-model.md).
 - **v0.3:** US-7 (Tailwind, responsive) und US-8 (Tage gruppieren/filtern) umgesetzt,
   reviewt und freigegeben ([`review.md`](review.md), Abschnitt 8); Review-Punkte daraus
   (T-22 bis T-26) alle erledigt. US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan)
-  umgesetzt, noch nicht reviewt.
+  umgesetzt, reviewt und freigegeben (Abschnitt 9); offen sind daraus zwei kleine
+  Darstellungspunkte (T-27 Aufklapp-Pfeil in Safari, T-28 Kontrast des Favoriten-Sterns).
   Die übrigen v0.3-Anforderungen stehen im Entwurf von [`requirements.md`](requirements.md),
   sind aber noch nicht als Stories im Backlog. Die Festival-Entität ist bis auf Weiteres
   zurückgestellt.
-- **Vektorsuche und LLM (neue Phase):** beschlossen, Umsetzung begonnen. Zwei getrennte
-  Phasen; Phase 2 beginnt erst, wenn Phase 1 funktioniert und reviewt ist.
-  Stand Phase 1: Roadmap-Schritt 1 (Frontend-Zielbild) erledigt – Suchbereich „Acts suchen"
-  über den Favoriten mit Suchfeld, Button, klickbarer Beispielanfrage und Ergebnisliste; die
-  Ergebnisse sind feste Mock-Daten in `static/app.js` (keine API, keine Embeddings).
-  - *Phase 1 – semantische Vektorsuche, ohne LLM:*
-    `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`.
-    Ergebnis ist eine nach Ähnlichkeit sortierte Liste von Acts. Schritte: durchsuchbare
-    Daten festlegen, Domain Model um Textfelder erweitern, pgvector einrichten, Embeddings
-    erzeugen und speichern, Ähnlichkeitssuche als API-Endpunkt und im Frontend, Tests, Review.
-  - *Phase 2 – LLM/RAG:*
-    `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`.
-    Die Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen
-    erfinden, die nicht in den gefundenen Daten stehen.
-- Tests: `python -m pytest`, 36 grün (Stand 2026-09-21).
+- **Vektorsuche und LLM (neue Phase):** zwei getrennte Phasen; Phase 2 beginnt erst, wenn
+  Phase 1 funktioniert und reviewt ist.
+  **Phase 1 – abgeschlossen, reviewt, freigegeben (US-11, 2026-09-24).** Umsetzung in
+  13 Roadmap-Schritten (Details: [`roadmap.md`](roadmap.md)): `Artist` um `genre`,
+  `description`, `embedding` (`vector(384)`, pgvector) erweitert; Embeddings per
+  `python -m app.embeddings` (`app/embeddings.py`, Modell
+  `paraphrase-multilingual-MiniLM-L12-v2`); Suche in `app/crud.py`
+  (`search_top_artists()`/`acts_for_artists()`/`search_acts()`, Top 5 Artists, unabhängig von
+  Tages-/Bühnenfilter, auch vergangene Acts); Endpunkt `GET /api/search?q=`
+  (`app/routers.py`); Frontend-Anbindung in `static/app.js` (Mock-Daten aus Schritt 1 entfernt).
+  Review: [`review.md`](review.md) Abschnitt 10, „Freigeben mit nicht blockierenden
+  Änderungswünschen", keine Blocker; offen ist T-29 (veraltete, ungenutzte Regel in
+  `static/style.css`, kosmetisch) sowie ein noch ausstehender echter Live-Browsertest (auf
+  dieser Maschine kein Browser-Automatisierungstool verfügbar, ersatzweise per HTTP gegen den
+  echten Server geprüft).
+  `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`, kein
+  LLM, keine generierte Antwort.
+  **Phase 2 – LLM/RAG: noch nicht begonnen.**
+  `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`. Die
+  Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen erfinden,
+  die nicht in den gefundenen Daten stehen.
+- Tests: `python -m pytest`, 66 grün (Stand 2026-09-24).
 
 ## 7. Offene Entscheidungen und bekannte Probleme
 
@@ -145,13 +163,11 @@ Details: [`domain-model.md`](domain-model.md).
 - Import (B7): Datenformat, Endpunkt oder Skript, Art des Zugriffsschutzes?
 - Festival-Entität (B5): gehört ein `Artist` zu einem Festival oder wird er geteilt?
 
-**Offene Fragen zur Vektorsuche (Phase 1):**
+**Offene Frage zur Vektorsuche** (Rest ist mit Phase 1 geklärt, siehe oben und
+[`requirements.md`](requirements.md)):
 
-- Welche Daten werden durchsucht? Aktuell haben `Artist`/`Stage` nur einen Namen – für eine
-  sinnvolle semantische Suche fehlen beschreibende Textfelder (z. B. Genre, Beschreibung).
-- Welches Embedding-Modell (lokal oder über eine API) und damit welche Vektordimension?
-- Wann werden Embeddings erzeugt (im Seed-Skript, beim Speichern, separat)?
-- Wie wird getestet? Die Tests laufen gegen SQLite, das pgvector nicht unterstützt.
+- Wie bekommen importierte Artists (B7, noch nicht umgesetzt) ihr Embedding – automatisch beim
+  Import oder per separatem Befehl wie nach dem Seed?
 
 **Bekannte Einschränkungen:**
 
@@ -165,10 +181,11 @@ Details: [`domain-model.md`](domain-model.md).
 
 ## 8. Nächste geplante Schritte
 
-1. US-9 und US-10 (Favoriten, persönlicher Zeitplan) testen und reviewen.
-2. Vektorsuche Phase 1 vorbereiten: offene Fragen klären (Abschnitt 7), dann Requirements,
-   Domain Model und Architektur ergänzen und in kleinen Schritten umsetzen. Phase 2 (LLM/RAG)
-   erst nach Review von Phase 1.
+1. T-27, T-28 (Darstellungspunkte aus dem Review von US-9/US-10) und T-29 (veraltete Regel in
+   `static/style.css`, aus dem Review von US-11) umsetzen; außerdem einmal die Suche live im
+   Browser prüfen, sobald ein Browser-Automatisierungstool verfügbar ist.
+2. Vektorsuche Phase 2 (LLM/RAG) nach [`roadmap.md`](roadmap.md) beginnen – frühestens jetzt
+   erlaubt, da Phase 1 reviewt und freigegeben ist (siehe `CLAUDE.md`, „Development Rule").
 3. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
 4. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
    - mehrere Festivals + Festivalauswahl (C4, C5, F5, B5, B6) – zurückgestellt,

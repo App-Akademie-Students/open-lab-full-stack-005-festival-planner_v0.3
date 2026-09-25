@@ -1,6 +1,6 @@
 # Backlog
 
-Status: Stand 2026-09-21. v0.1 bestätigt und umgesetzt (Roadmap-Schritt 9). v0.2 ist
+Status: Stand 2026-09-24. v0.1 bestätigt und umgesetzt (Roadmap-Schritt 9). v0.2 ist
 umgesetzt, in zwei Phasen: Refactoring Phase 1 (T-1 bis T-9, `Artist`/`Stage`/`Act` statt
 `ProgramItem`) und Refactoring Phase 2 (T-10 bis T-13, Umstellung von SQLite auf PostgreSQL
 bei Neon) – siehe die beiden Abschnitte unten.
@@ -17,6 +17,12 @@ gruppieren und filtern, umgesetzt) aufgenommen – siehe Abschnitt „v0.3" unte
 [`review.md`](review.md), Abschnitt 8 (Stand 2026-09-21), freigegeben: „Freigeben mit nicht
 blockierenden Änderungswünschen", keine Blocker; die Änderungswünsche stehen als T-22 bis T-26
 unter „Offene Punkte aus dem Review" (alle erledigt).
+US-9 (Favoriten merken) und US-10 (persönlicher Zeitplan) sind in [`review.md`](review.md),
+Abschnitt 9 (Stand 2026-09-23), ebenfalls freigegeben: „Freigeben mit nicht blockierenden
+Änderungswünschen", keine Blocker; offen sind daraus T-27 und T-28.
+US-11 (Acts semantisch suchen, Vektorsuche Phase 1) ist in [`review.md`](review.md),
+Abschnitt 10 (Stand 2026-09-24), freigegeben: „Freigeben mit nicht blockierenden
+Änderungswünschen", keine Blocker; offen daraus ist T-29.
 
 Abgeleitet aus den Muss-Anforderungen in [`requirements.md`](requirements.md).
 Technischer Rahmen: [`architecture.md`](architecture.md).
@@ -232,6 +238,19 @@ Aus Abschnitt 8 (v0.3, US-7/US-8):
 | T-25 | Test für `build_acts()` in `app/seed.py`: Anzahl Tage, `ends_at > starts_at`, Acts über Mitternacht enden am Folgetag | erledigt |
 | T-26 | `requirements.md` nachziehen: Statuszeile und Absatz „Erweiterbarkeit" behandeln Tagesfilter/Tailwind noch als nicht umgesetzt | erledigt |
 
+Aus Abschnitt 9 (v0.3, US-9/US-10):
+
+| ID | Titel | Status |
+|---|---|---|
+| T-27 | Nativen Aufklapp-Marker in Safari/iOS ausblenden: `[&::-webkit-details-marker]:hidden` auf `<summary>` von „Meine Favoriten", sonst steht neben dem eigenen Pfeil ▸ ein zweites Dreieck | offen |
+| T-28 | Kontrast des Favoriten-Sterns auf mind. 3 : 1 erhöhen (WCAG 1.4.11), z. B. `text-gray-500` / `aria-pressed:text-amber-600`; auch auf den farbigen Status-Zeilen prüfen | offen |
+
+Aus Abschnitt 10 (v0.3, US-11, Vektorsuche Phase 1):
+
+| ID | Titel | Status |
+|---|---|---|
+| T-29 | `static/style.css` neu mit der Tailwind-CLI erzeugen: enthält eine ungenutzte Regel `.fixed{position:fixed}` (die einzige Abweichung von einem frischen Build), vermutlich Rest einer inzwischen entfernten Klasse; kosmetisch, kein Verhaltensunterschied | offen |
+
 **T-22/T-23 – Umsetzung (2026-09-21):** Text-Badge hinter dem Titel (`STATUS_BADGES` in
 `static/app.js`, Klassen vollständig ausgeschrieben, `static/style.css` neu erzeugt).
 Veraltete Antworten verwirft ein Anfragezähler (`latestProgramRequest`) – einfacher als
@@ -256,10 +275,10 @@ Langfristig, ohne aktuellen Bedarf: `create_all` beim App-Start durch Migratione
 
 ## v0.3 – Neue Anforderungen
 
-Abgeleitet aus dem Entwurf v0.3 in [`requirements.md`](requirements.md). US-7, US-8 und
-US-9 und US-10 sind umgesetzt; die übrigen neuen Anforderungen (C4 mehrere
-Festivals, C5, C9, F5, F10, B5, B6 Festival-Teil, B7) sind noch nicht ins Backlog
-übernommen. Die Festival-Entität (C4, C5, F5, B5) ist bis auf Weiteres zurückgestellt.
+Abgeleitet aus dem Entwurf v0.3 in [`requirements.md`](requirements.md). US-7 bis US-11 sind
+umgesetzt; die übrigen neuen Anforderungen (C4 mehrere Festivals, C5, C9, F5, F10, B5, B6
+Festival-Teil, B7) sind noch nicht ins Backlog übernommen. Die Festival-Entität (C4, C5, F5,
+B5) ist bis auf Weiteres zurückgestellt.
 
 | ID | Titel | Abhängig von | Anforderungen | Status |
 |---|---|---|---|---|
@@ -267,6 +286,7 @@ Festivals, C5, C9, F5, F10, B5, B6 Festival-Teil, B7) sind noch nicht ins Backlo
 | US-8 | Programm nach Tag gruppieren und filtern | US-2 | C4 (Mehrtägigkeit), C6, F6, B4, B6 (Tagesfilter) | erledigt |
 | US-9 | Acts als Favorit merken | US-2 | C7, F7 | erledigt |
 | US-10 | Persönlicher Zeitplan über dem Programm | US-9 | C8, F8 | erledigt |
+| US-11 | Acts semantisch suchen | US-2 | C11, F11, B8, B9, T1, T4 | erledigt |
 
 ### US-7 · Responsive Darstellung mit Tailwind CSS
 
@@ -393,7 +413,39 @@ wieder zugeklappt. Geprüft mit Headless-Chrome: zugeklappt beim Laden, Aufklapp
 Anzahl aktualisiert sich beim Stern-Klick, Bereich bleibt dabei offen, 360 px ohne horizontales
 Scrollen.
 
+### US-11 · Acts semantisch suchen
+
+> Als **Besucher** möchte ich Acts in eigenen Worten beschreiben und finden (z. B. „ruhige
+> elektronische Musik"), auch wenn diese Worte nicht wörtlich im Programm stehen, damit ich
+> Acts entdecke, deren Namen ich nicht kenne.
+
+- [x] Ein Suchfeld nimmt eine frei formulierte Anfrage entgegen; nach dem Absenden erscheint
+      eine Liste passender Acts, ähnlichster zuerst, je Treffer Titel, Bühne, Tag, Start- und
+      Endzeit.
+- [x] Durchsucht wird der Artist (Name, Genre, Beschreibung), nicht Bühne oder Zeiten; Treffer
+      sind die Acts der 5 ähnlichsten Artists (feste Höchstzahl, keine Mindest-Ähnlichkeit),
+      unabhängig von Tages-/Bühnenfilter, auch bereits vergangene Acts.
+- [x] Deutsch formulierte, auch umgangssprachliche Anfragen liefern passende Acts (T4).
+- [x] Bei leerer Anfrage erscheint ein Hinweis statt einer Suche; liefert eine Anfrage keine
+      Treffer, erscheint ein Hinweis, dass nichts Passendes gefunden wurde.
+- [x] Kein LLM, kein generierter Text – das Ergebnis ist ausschließlich eine Liste vorhandener
+      Acts.
+- [x] `GET /api/search?q=` liefert die Treffer serverseitig sortiert; die Ähnlichkeitssuche
+      läuft in der PostgreSQL-Datenbank (pgvector).
+
+**US-11 – Umsetzung (2026-09-24), Roadmap „Vektorsuche Phase 1" (Schritte 1–12):**
+`Artist.genre`/`.description`/`.embedding` im Domain Model (Schritt 7); Embeddings per
+`python -m app.embeddings` (Schritt 8, `app/embeddings.py`); Suche in `app/crud.py`
+(`search_top_artists()`, `acts_for_artists()`, `search_acts()`, Schritt 10); Endpunkt
+`GET /api/search?q=` in `app/routers.py` (Schritt 11); Frontend-Anbindung in `static/app.js`
+(Schritt 12, ersetzt die Mock-Ergebnisse aus Schritt 1). Details, Entscheidungen und
+Verifikation: [`architecture.md`](architecture.md#semantische-suche),
+[`requirements.md`](requirements.md) (B8), [`review.md`](review.md) (Abschnitt 10),
+[`roadmap.md`](roadmap.md).
+
 ## Bewusst nicht im Backlog
 
-Suche, Detailansicht, Admin-UI, Auto-Refresh, Konflikterkennung – siehe optionale
-Anforderungen O2–O8 und Scope-Abgrenzung in [`requirements.md`](requirements.md).
+Detailansicht, Admin-UI, Auto-Refresh, Konflikterkennung – siehe optionale Anforderungen
+O2, O6–O8 und Scope-Abgrenzung in [`requirements.md`](requirements.md). Die generierte
+Text-Antwort per LLM (Vektorsuche Phase 2/RAG) ist eine eigene, spätere Phase, siehe
+`CLAUDE.md`.

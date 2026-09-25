@@ -261,49 +261,59 @@ function formatDay(isoDate) {
   return `${weekday}, ${String(day).padStart(2, "0")}.${String(month).padStart(2, "0")}.`;
 }
 
-// Semantic search – target UI only (vector search phase 1, step 1). The results are fixed mock
-// data, ranked by a made-up similarity score; every query returns the same list. Titles, stages
-// and times follow the seed. Replaced by the search API in a later step.
-const MOCK_SEARCH_RESULTS = [
-  { title: "Ambient Drift", stage: "Zeltbühne", day: "Tag 3", time: "12:00–13:30", score: 0.91 },
-  { title: "Lo-Fi Lounge", stage: "Zeltbühne", day: "Tag 4", time: "11:30–13:00", score: 0.87 },
-  { title: "Chill Session", stage: "Waldbühne", day: "Tag 1", time: "16:30–17:30", score: 0.82 },
-  { title: "Electro Pulse", stage: "Zeltbühne", day: "Tag 1", time: "15:30–17:00", score: 0.74 },
-];
-
+// Semantic search (C11, F11): calls GET /api/search?q=, replacing the frontend mock from
+// vector search phase 1, step 1.
 function initSearch() {
   const input = document.getElementById("search-input");
   document.getElementById("search-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    renderSearchResults(input.value.trim());
+    runSearch(input.value.trim());
   });
   // The example query is a button, so trying the search needs no typing.
   document.getElementById("search-example").addEventListener("click", (event) => {
     input.value = event.currentTarget.textContent;
-    renderSearchResults(input.value);
+    runSearch(input.value.trim());
   });
 }
 
-function renderSearchResults(query) {
-  const list = document.getElementById("search-list");
+// Counts runSearch() calls, same reasoning as latestProgramRequest: only the answer to the
+// latest search may render, in case an earlier request is still in flight.
+let latestSearchRequest = 0;
+
+async function runSearch(query) {
+  const request = ++latestSearchRequest;
   const hasQuery = query !== "";
 
-  list.innerHTML = "";
-  if (hasQuery) {
-    for (const [index, result] of MOCK_SEARCH_RESULTS.entries()) {
-      list.appendChild(renderSearchResult(result, index + 1));
-    }
-  }
   document.getElementById("search-results-heading").textContent =
     hasQuery ? `Passende Acts für „${query}“` : "";
   document.getElementById("search-results-heading").hidden = !hasQuery;
-  document.getElementById("search-mock-hint").hidden = !hasQuery;
   document.getElementById("search-empty").hidden = hasQuery;
-  list.hidden = !hasQuery;
+  document.getElementById("search-no-results").hidden = true;
+  document.getElementById("search-loading").hidden = !hasQuery;
+  document.getElementById("search-list").innerHTML = "";
+  document.getElementById("search-list").hidden = true;
   document.getElementById("search-results").hidden = false;
+
+  if (!hasQuery) return; // F11: empty query shows a hint instead of searching
+
+  const response = await fetch(`/api/search?${new URLSearchParams({ q: query })}`);
+  const data = await response.json();
+  if (request !== latestSearchRequest) return; // stale answer, a newer search is pending
+
+  document.getElementById("search-loading").hidden = true;
+  renderSearchResults(data.items);
 }
 
-function renderSearchResult(result, rank) {
+function renderSearchResults(items) {
+  const list = document.getElementById("search-list");
+  for (const [index, item] of items.entries()) {
+    list.appendChild(renderSearchResult(item, index + 1));
+  }
+  document.getElementById("search-no-results").hidden = items.length > 0;
+  list.hidden = items.length === 0;
+}
+
+function renderSearchResult(item, rank) {
   const li = document.createElement("li");
   li.className = "flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-sm";
 
@@ -313,17 +323,14 @@ function renderSearchResult(result, rank) {
 
   const title = document.createElement("span");
   title.className = "min-w-0 flex-1 font-semibold break-words";
-  title.textContent = result.title;
-
-  const score = document.createElement("span");
-  score.className = "shrink-0 text-xs text-gray-500 tabular-nums";
-  score.textContent = `Relevanz ${Math.round(result.score * 100)} %`;
+  title.textContent = item.title;
 
   const details = document.createElement("span");
   details.className = "basis-full pl-8 text-gray-600";
-  details.textContent = `${result.day} · ${result.time} · ${result.stage}`;
+  details.textContent =
+    `${formatDay(item.day)} · ${formatTime(item.starts_at)}–${formatTime(item.ends_at)} · ${item.stage}`;
 
-  li.append(position, title, score, details);
+  li.append(position, title, details);
   return li;
 }
 
