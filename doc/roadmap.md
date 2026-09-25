@@ -62,7 +62,7 @@
 
 1 Requirement für LLM-Antwort ergänzen
 
-2 LLM auswählen (manuell)
+2 LLM auswählen (manuell) - verwende OLLAMA - qwen3-instruct:4b
 
 3 Festlegen, welche Retrieval-Daten an das LLM gehen
 
