@@ -16,9 +16,11 @@ from app.llm import (
     SYSTEM_PROMPT,
     TIMEOUT_SECONDS,
     LLMUnavailableError,
+    UngroundedAnswerError,
     build_context,
     build_messages,
     chat,
+    find_ungrounded,
     format_time,
     generate_answer,
     post_to_ollama,
@@ -157,7 +159,7 @@ def test_generate_answer_sends_context_built_from_hits():
     send = fake_send("Antwort")
     rows = [hit("Brass Explosion", datetime(2026, 9, 27, 15, 30), datetime(2026, 9, 27, 17, 0))]
 
-    assert generate_answer("Wo gibt es Blasmusik?", rows, NOW, send) == "Antwort"
+    assert generate_answer("Wo gibt es Blasmusik?", rows, NOW, send=send) == "Antwort"
     assert send.sent[0]["messages"] == build_messages("Wo gibt es Blasmusik?", rows, NOW)
 
 
@@ -165,7 +167,7 @@ def test_generate_answer_without_hits_does_not_call_the_llm():
     send = fake_send("Antwort")
 
     with pytest.raises(ValueError):
-        generate_answer("Frage", [], NOW, send)
+        generate_answer("Frage", [], NOW, send=send)
     assert send.sent == []
 
 
@@ -226,3 +228,82 @@ def test_post_to_ollama_invalid_json_is_unavailable(monkeypatch):
 
     with pytest.raises(LLMUnavailableError):
         post_to_ollama({"model": "m"})
+
+
+# Grounding check (roadmap phase 2 step 11). NOW is Samstag 26.09. 15:30.
+BRASS = hit("Brass Explosion", datetime(2026, 9, 27, 15, 30), datetime(2026, 9, 27, 17, 0))
+MORNING = hit("Morning Brass", datetime(2026, 9, 26, 12, 0), datetime(2026, 9, 26, 13, 0))
+OWLS = hit(
+    "Night Owls", datetime(2026, 9, 26, 23, 0), datetime(2026, 9, 27, 1, 0), stage="Zeltbühne"
+)
+ARTISTS = ["Brass Explosion", "Morning Brass", "Night Owls", "Jazz Corner"]
+STAGES = ["Hauptbühne", "Waldbühne", "Zeltbühne"]
+
+
+def ungrounded(answer, rows=(BRASS, MORNING, OWLS)):
+    return find_ungrounded(answer, list(rows), NOW, ARTISTS, STAGES)
+
+
+def test_grounded_answer_has_no_problems():
+    answer = (
+        "Brass Explosion spielt am Sonntag, 27.09., von 15:30 bis 17:00 auf der Hauptbühne. "
+        "Night Owls legt Samstag ab 23:00 bis 1:00 in der Zeltbühne auf. "
+        "Morning Brass ist schon vorbei."
+    )
+    assert ungrounded(answer) == []
+
+
+def test_act_outside_the_hits_is_ungrounded():
+    assert ungrounded("Jazz Corner spielt auf der Hauptbühne.") == ["act not in hits: Jazz Corner"]
+
+
+def test_stage_outside_the_hits_is_ungrounded():
+    assert ungrounded("Brass Explosion spielt auf der Waldbühne.") == [
+        "stage not in hits: Waldbühne"
+    ]
+
+
+def test_invented_time_is_ungrounded():
+    assert ungrounded("Brass Explosion beginnt um 16:00.") == ["time not in hits: 16:00"]
+
+
+def test_invented_date_and_weekday_are_ungrounded():
+    # "So" read as "Samstag" was a real mistake in step 6 - here Montag/28.09. are not in the hits.
+    assert ungrounded("Brass Explosion spielt am Montag, 28.09.") == [
+        "date not in hits: 28.09.",
+        "weekday not in hits: Montag",
+    ]
+
+
+def test_past_act_without_past_marker_is_ungrounded():
+    assert ungrounded("Blasmusik gibt es mit Morning Brass und Brass Explosion.") == [
+        "past act not marked as past: Morning Brass"
+    ]
+
+
+def test_past_act_asked_about_in_past_tense_is_grounded():
+    assert ungrounded("Morning Brass hat am Samstag um 12:00 auf der Hauptbühne gespielt.") == []
+
+
+def test_running_claim_without_running_hit_is_ungrounded():
+    # Seen in step 11: "Night Owls … läuft gerade noch" although it only starts at 23:00.
+    assert ungrounded("Night Owls läuft gerade noch auf der Zeltbühne.") == [
+        "claims an act is running, but none of the hits is"
+    ]
+
+
+def test_running_claim_with_running_hit_is_grounded():
+    running = hit("Dub Station", datetime(2026, 9, 26, 15, 0), datetime(2026, 9, 26, 16, 30))
+    assert ungrounded("Dub Station läuft gerade auf der Hauptbühne.", [running]) == []
+
+
+def test_generate_answer_rejects_ungrounded_answer():
+    send = fake_send("Jazz Corner spielt um 16:00.")
+
+    with pytest.raises(UngroundedAnswerError):
+        generate_answer("Jazz?", [BRASS], NOW, ARTISTS, STAGES, send=send)
+
+
+def test_ungrounded_answer_counts_as_unavailable():
+    # The API only catches LLMUnavailableError - an ungrounded answer must be caught with it.
+    assert issubclass(UngroundedAnswerError, LLMUnavailableError)

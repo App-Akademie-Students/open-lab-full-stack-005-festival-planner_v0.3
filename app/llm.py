@@ -9,7 +9,9 @@ Ollama is called over its HTTP API with `urllib` from the standard library, so n
 dependency is needed for a single POST request.
 """
 import json
+import re
 import urllib.request
+from collections.abc import Iterable
 from collections.abc import Callable
 from datetime import datetime
 
@@ -30,8 +32,16 @@ class LLMUnavailableError(Exception):
     """
 
 
-# Refined in roadmap phase 2 step 6 (prompt variant v2) - see doc/architecture.md for the
-# reason behind every rule. German on purpose: the answer must be German (T5).
+class UngroundedAnswerError(LLMUnavailableError):
+    """The LLM answered, but the answer states facts that are not in its context (B10).
+
+    A subclass of LLMUnavailableError on purpose: a wrong answer is worse than none, so the
+    caller treats it exactly like an unavailable LLM.
+    """
+
+
+# Refined in roadmap phase 2 steps 6 and 11 - see doc/architecture.md for the reason behind
+# every rule. German on purpose: the answer must be German (T5).
 SYSTEM_PROMPT = """Du bist ein Assistent für einen Festivalplaner.
 
 Beantworte die Frage ausschließlich anhand des bereitgestellten Kontexts.
@@ -45,6 +55,8 @@ Beachte den Status jedes Acts:
 - „vorbei": empfiehl diesen Act nicht. Wenn du ihn trotzdem nennst, schreibe dazu, dass er schon vorbei ist.
 
 Ein Act passt nur zur Frage, wenn sein Genre oder seine Beschreibung ausdrücklich dazu passt. Nenne nur passende Acts und lass die anderen weg.
+
+Schreibe einem Act nur Eigenschaften zu, die wörtlich in seinem Genre oder seiner Beschreibung stehen. Wenn nur ein Act passt, nenne nur diesen einen.
 
 Nenne Acts beim Namen, nicht über ihre Nummer, jeweils mit Tag, Uhrzeit und Bühne.
 
@@ -107,6 +119,66 @@ def build_messages(question: str, rows, now: datetime) -> list[dict[str, str]]:
     ]
 
 
+TIME_PATTERN = re.compile(r"\b(\d{1,2}):(\d{2})\b")  # 15:30, 1:00
+DATE_PATTERN = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.")  # 26.09.
+# A past act may be mentioned (e.g. "Wann hat X gespielt?") - but only marked as past.
+PAST_MARKERS = ("vorbei", "gespielt", "stattgefunden")
+# Claims that something is on right now - only true if one of the hits is running.
+RUNNING_CLAIMS = ("läuft gerade", "gerade läuft", "läuft jetzt", "jetzt läuft")
+
+
+def find_ungrounded(
+    answer: str, rows, now: datetime, artist_names: Iterable[str], stage_names: Iterable[str]
+) -> list[str]:
+    """Facts in `answer` that its context (the search hits `rows`) does not back; [] if none.
+
+    A deterministic check after the LLM call (roadmap phase 2 step 11), because the prompt
+    alone does not stop the 4B model from mixing things up. It checks what can be checked
+    exactly: acts and stages (against all known names, so one outside the hits is caught),
+    times, dates and weekdays, a past act presented without being marked as past, and
+    "läuft gerade" although none of the hits is running.
+    Invented properties ("… auch mit Blasinstrumenten") cannot be caught this way.
+    """
+    problems = []
+
+    hit_titles = {row.title for row in rows}
+    for name in artist_names:
+        if name in answer and name not in hit_titles:
+            problems.append(f"act not in hits: {name}")
+    hit_stages = {row.stage for row in rows}
+    for name in stage_names:
+        if name in answer and name not in hit_stages:
+            problems.append(f"stage not in hits: {name}")
+
+    # Start and end of every hit; an act past midnight also brings its end date and weekday.
+    moments = [moment for row in rows for moment in (row.starts_at, row.ends_at)]
+    times = {(moment.hour, moment.minute) for moment in moments}
+    for hour, minute in TIME_PATTERN.findall(answer):
+        if (int(hour), int(minute)) not in times:
+            problems.append(f"time not in hits: {hour}:{minute}")
+    dates = {(moment.day, moment.month) for moment in moments}
+    for day, month in DATE_PATTERN.findall(answer):
+        if (int(day), int(month)) not in dates:
+            problems.append(f"date not in hits: {day}.{month}.")
+    weekdays = {WEEKDAYS[moment.weekday()] for moment in moments}
+    for name in WEEKDAYS:
+        if name in answer and name not in weekdays:
+            problems.append(f"weekday not in hits: {name}")
+
+    past_titles = [
+        row.title
+        for row in rows
+        if row.title in answer and act_phase(row.starts_at, row.ends_at, now) == "past"
+    ]
+    if past_titles and not any(marker in answer for marker in PAST_MARKERS):
+        problems.append(f"past act not marked as past: {', '.join(past_titles)}")
+
+    nothing_running = all(act_phase(row.starts_at, row.ends_at, now) != "running" for row in rows)
+    if nothing_running and any(claim in answer for claim in RUNNING_CLAIMS):
+        problems.append("claims an act is running, but none of the hits is")
+    return problems
+
+
 def post_to_ollama(body: dict) -> dict:
     """POSTs `body` to Ollama's chat endpoint and returns the decoded JSON response.
 
@@ -151,13 +223,24 @@ def chat(messages: list[dict[str, str]], send: Callable[[dict], dict] = post_to_
 
 
 def generate_answer(
-    question: str, rows, now: datetime, send: Callable[[dict], dict] = post_to_ollama
+    question: str,
+    rows,
+    now: datetime,
+    artist_names: Iterable[str] = (),
+    stage_names: Iterable[str] = (),
+    send: Callable[[dict], dict] = post_to_ollama,
 ) -> str:
     """The generated answer (B10) to `question`, based only on the search hits `rows`.
 
     `rows` must not be empty: without hits there is no LLM call at all (B10) - the caller
-    checks that before. Raises LLMUnavailableError if the LLM gives no usable answer.
+    checks that before. `artist_names`/`stage_names` are all known names, for the grounding
+    check (`find_ungrounded`). Raises LLMUnavailableError if the LLM gives no usable answer,
+    and its subclass UngroundedAnswerError if the answer states facts not in the hits.
     """
     if not rows:
         raise ValueError("generate_answer() needs at least one search hit")
-    return chat(build_messages(question, rows, now), send)
+    answer = chat(build_messages(question, rows, now), send)
+    problems = find_ungrounded(answer, rows, now, artist_names, stage_names)
+    if problems:
+        raise UngroundedAnswerError(f"{'; '.join(problems)} - answer: {answer!r}")
+    return answer

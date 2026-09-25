@@ -53,7 +53,7 @@ Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 | `app/embeddings.py` | Embedding-Text und -Modell; `python -m app.embeddings` erzeugt die Embeddings aller Artists |
 | `app/llm.py` | Generierte Antwort (Phase 2, in Arbeit): System-Prompt, Kontext aus den Suchtreffern, Ollama-Aufruf (`urllib`, Zeitlimit 60 s), Fehler als `LLMUnavailableError` |
 | `static/` | `index.html`, `app.js`, erzeugtes `style.css` |
-| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py`, `test_crud.py`, `test_search_api.py`, `test_llm.py`, `test_answer_api.py` (96 Tests) |
+| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py`, `test_crud.py`, `test_search_api.py`, `test_llm.py`, `test_answer_api.py` (108 Tests) |
 
 **API** (flacher JSON-Vertrag, `title`/`stage` als Strings):
 
@@ -155,7 +155,7 @@ Details: [`domain-model.md`](domain-model.md).
   per Headless Chrome nachgeholt.
   `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`, kein
   LLM, keine generierte Antwort.
-  **Phase 2 – LLM/RAG: in Arbeit (Roadmap-Schritte 1–10 erledigt, 2026-09-25).**
+  **Phase 2 – LLM/RAG: in Arbeit (Roadmap-Schritte 1–11 erledigt, 2026-09-25).**
   Anforderungen C12, F12, B10, T5 in [`requirements.md`](requirements.md): Antwort nur auf
   Knopfdruck („Antwort generieren") zu einer Suche mit Treffern, Kontext ausschließlich die
   Suchtreffer, bei LLM-Ausfall bleiben die Treffer sichtbar, kein Chat. LLM: `qwen3-instruct:4b`
@@ -172,11 +172,14 @@ Details: [`domain-model.md`](domain-model.md).
   funktioniert; der Ollama-Aufruf samt Fehlerbehandlung ist im Backend (`generate_answer()`)
   und über `GET /api/answer?q=` erreichbar (erster Aufruf ca. 74 s wegen Modell-Laden, danach
   17–22 s). Frontend: Button „Antwort generieren" über der Trefferliste, im echten Browser
-  (Headless Chrome, 360 px) geprüft.
+  (Headless Chrome, 360 px) geprüft. Halluzinationsschutz: Eine Prüfung im Code verwirft
+  Antworten mit Acts, Bühnen, Zeiten oder Tagen außerhalb der Treffer, mit vergangenen Acts
+  ohne „vorbei" oder mit falschem „läuft gerade"; dazu eine Prompt-Regel gegen angedichtete
+  Eigenschaften.
   `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`. Die
   Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen erfinden,
   die nicht in den gefundenen Daten stehen.
-- Tests: `python -m pytest`, 96 grün (Stand 2026-09-25).
+- Tests: `python -m pytest`, 108 grün (Stand 2026-09-25).
 
 ## 7. Offene Entscheidungen und bekannte Probleme
 
@@ -196,10 +199,11 @@ Details: [`domain-model.md`](domain-model.md).
 
 **Bekannte Einschränkungen:**
 
-- Generierte Antwort (Phase 2, noch nicht umgesetzt): Das 4B-Modell nennt teils auch schwach
-  passende Suchtreffer und hat im End-to-End-Test einem Act eine Eigenschaft angedichtet
-  („Moonlight Session … mit Blasinstrumenten"); Acts, Bühnen und Zeiten hat es bisher nicht
-  erfunden. Wird in Roadmap-Schritt 11 (Halluzinationsschutz) angegangen.
+- Generierte Antwort: Das 4B-Modell nennt teils auch schwach passende Suchtreffer und
+  dichtet ihnen dann manchmal Eigenschaften an (z. B. Blasinstrumente bei einem Jazztrio).
+  Falsche Acts, Bühnen, Zeiten, Tage und falsche „vorbei/läuft gerade"-Aussagen fängt eine
+  Prüfung im Code ab (Antwort wird verworfen); angedichtete Eigenschaften lassen sich so nicht
+  erkennen. Die Trefferliste mit den echten Angaben steht immer direkt unter der Antwort.
 
 - Tests decken die PostgreSQL-spezifische Infrastruktur (URL-Normalisierung, psycopg) nicht
   ab, da sie gegen In-Memory-SQLite laufen; auch sie brauchen trotzdem eine gesetzte
@@ -211,9 +215,8 @@ Details: [`domain-model.md`](domain-model.md).
 
 ## 8. Nächste geplante Schritte
 
-1. Vektorsuche Phase 2 (LLM/RAG) nach [`roadmap.md`](roadmap.md) abschließen: Fehlerfälle
-   und Halluzinationsschutz (Schritt 11, u. a. der Fall „Blasinstrumente"), Tests (Schritt 12),
-   Review und Dokumentation (Schritt 13).
+1. Vektorsuche Phase 2 (LLM/RAG) nach [`roadmap.md`](roadmap.md) abschließen: Tests prüfen
+   und ergänzen (Schritt 12), Review und Dokumentation (Schritt 13).
 2. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
 3. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
    - mehrere Festivals + Festivalauswahl (C4, C5, F5, B5, B6) – zurückgestellt,

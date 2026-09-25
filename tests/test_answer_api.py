@@ -137,6 +137,20 @@ def test_answer_reports_unavailable_llm(artist_ids_override):
     assert response.json() == {"status": "unavailable", "answer": None}
 
 
+def test_answer_with_facts_not_in_the_hits_is_dropped(artist_ids_override):
+    # Grounding check (step 11): the act plays at 15:00, the "answer" invents 20:00.
+    artist_ids_override.append(add_brass_explosion())
+
+    def inventing_send(body):
+        return {"message": {"content": "Brass Explosion spielt um 20:00 auf der Hauptbühne."}}
+
+    app.dependency_overrides[llm_send] = lambda: inventing_send
+
+    response = client.get("/api/answer", params={"q": "Wo gibt es Blasmusik?"})
+
+    assert response.json() == {"status": "unavailable", "answer": None}
+
+
 def test_search_is_unchanged_by_the_answer_endpoint(artist_ids_override):
     # /api/search must not call the LLM and keeps its response shape (no answer field).
     artist_ids_override.append(add_brass_explosion())

@@ -143,7 +143,15 @@ def answer(
     if not rows:
         return AnswerResponse(status="no_hits", answer=None)
     try:
-        text = generate_answer(q.strip(), rows, now, send)
+        text = generate_answer(
+            q.strip(),
+            rows,
+            now,
+            artist_names=crud.list_artist_names(db),
+            stage_names=crud.list_stages(db),
+            send=send,
+        )
+    # Also covers UngroundedAnswerError: an answer with facts not in the hits is dropped (B10).
     except LLMUnavailableError as error:
         logger.warning("Generated answer unavailable: %s", error)
         return AnswerResponse(status="unavailable", answer=None)

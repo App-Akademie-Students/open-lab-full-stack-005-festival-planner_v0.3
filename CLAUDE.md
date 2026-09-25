@@ -36,8 +36,8 @@ vollständig umgesetzt, getestet und reviewt (US-11, siehe oben) – Details und
 `doc/requirements.md`), Modellwahl (`qwen3-instruct:4b` über Ollama), Prompt und Kontextformat
 stehen; `app/llm.py` baut Kontext und Nachrichten aus den Suchtreffern und ruft Ollama auf
 (Roadmap-Schritte 7 und 8); `GET /api/answer?q=` liefert die Antwort (Schritt 9), das Frontend
-fordert sie per Button „Antwort generieren" an (Schritt 10). Noch offen: Halluzinationsschutz,
-Tests, Review (Schritte 11–13).
+fordert sie per Button „Antwort generieren" an (Schritt 10), eine Prüfung im Code verwirft
+Antworten mit erfundenen Fakten (Schritt 11). Noch offen: Tests, Review (Schritte 12–13).
 
 Ab Phase 2 gilt eine neue Leitlinie für die Architektur: nicht mehr „so klein wie möglich"
 (MVP), sondern gut strukturiert und erweiterbar – die Struktur wächst Schritt für Schritt mit
@@ -122,6 +122,12 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   Antwort) wird zu `LLMUnavailableError`; der Aufrufer zeigt dann „nicht verfügbar", die
   Suche bleibt unberührt (B10). Ohne Suchtreffer wird kein LLM aufgerufen. Der HTTP-Aufruf ist
   als `send` austauschbar; Tests brauchen kein laufendes Ollama.
+* **Halluzinationsschutz (Roadmap Phase 2, Schritt 11):** Nach dem LLM-Aufruf prüft
+  `app/llm.py::find_ungrounded()` die Antwort gegen die Treffer: bekannte Act- und
+  Bühnennamen, Uhrzeiten, Daten und Wochentage nur aus den Treffern, vergangene Acts nur als
+  vergangen, „läuft gerade" nur mit laufendem Treffer. Bei Befund wird die Antwort verworfen
+  (`UngroundedAnswerError` → `unavailable`) – lieber keine Antwort als eine falsche.
+  Angedichtete Eigenschaften erkennt die Prüfung nicht; dagegen steht nur eine Prompt-Regel.
 * **Caching statischer Dateien:** `app/main.py` liefert `static/` mit `Cache-Control: no-cache`
   aus (`NoCacheStaticFiles`). Ohne den Header cacht der Browser `app.js`/`style.css`
   heuristisch und fragt sie nach einer Frontend-Änderung gar nicht erst neu an – dann läuft die

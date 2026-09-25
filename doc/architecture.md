@@ -67,7 +67,7 @@ Datenbankdatei mehr. `.env` mit der `DATABASE_URL` ist per `.gitignore` von Git 
 | `app/main.py` | App-Objekt, `init_db()` beim Start, bindet `routers.py` und `static/` ein. Enthält selbst keine Endpunkte mehr. | `db`, `routers` |
 | `app/seed.py` | `python -m app.seed`: Tabellen löschen und neu anlegen, Artists (mit Genre und Beschreibung, noch ohne Embedding) und Stages anlegen, Acts für vier Festivaltage (ab heute) auf 3 Bühnen mit FK-Referenzen einfügen. | `db`, `models`, `schedule` |
 | `app/embeddings.py` | `MODEL_NAME`, `artist_embedding_text()` (einziger Ort, an dem der Embedding-Text entsteht), `get_model()` (lädt das Modell einmal pro Prozess), `embed_texts()`, `embed_artists()`; `python -m app.embeddings` erzeugt die Embeddings aller Artists neu. | `crud`, `models`, `sentence-transformers` (erst beim Laden des Modells importiert) |
-| `app/llm.py` | Generierte Antwort (Phase 2): `SYSTEM_PROMPT`, `build_context()` (einziger Ort, an dem der Kontexttext entsteht), `format_time()`, `build_messages()` (reine Funktionen auf den Zeilen von `crud.acts_for_artists()`); Ollama-Aufruf `post_to_ollama()`/`chat()`, Einstiegspunkt `generate_answer()`, Fehler als `LLMUnavailableError`. | `schedule`, Ollama (HTTP, `urllib`) |
+| `app/llm.py` | Generierte Antwort (Phase 2): `SYSTEM_PROMPT`, `build_context()` (einziger Ort, an dem der Kontexttext entsteht), `format_time()`, `build_messages()` (reine Funktionen auf den Zeilen von `crud.acts_for_artists()`); Ollama-Aufruf `post_to_ollama()`/`chat()`, Prüfung `find_ungrounded()`, Einstiegspunkt `generate_answer()`, Fehler als `LLMUnavailableError`/`UngroundedAnswerError`. | `schedule`, Ollama (HTTP, `urllib`) |
 | `static/*` | HTML + Vanilla JS, gestaltet mit Tailwind-Klassen; `style.css` ist erzeugt. Lädt Bühnen und Programm über die API, rendert die Liste, filtert per Dropdown, hebt Status hervor. | nur die HTTP-API |
 
 ## Wo liegt was?
@@ -517,7 +517,7 @@ automatisiert testbar sind: `app/llm.py::build_context()` (Roadmap-Schritt 7). D
 bewusst analog zu `app/embeddings.py` aufgebaut – ein flaches Modul pro KI-Baustein, kein
 `services/`-Paket, solange es nur diese beiden gibt.
 
-### System-Prompt (Roadmap-Schritt 5, nachgeschärft in Schritt 6)
+### System-Prompt (Roadmap-Schritt 5, nachgeschärft in Schritten 6 und 11)
 
 Auf Deutsch, damit das Modell nicht ins Englische wechselt (T5). Er enthält nur Regeln, keine
 Festivaldaten – die stehen in der User-Nachricht (Kontextformat oben). Basis ist der
@@ -539,6 +539,8 @@ Beachte den Status jedes Acts:
 
 Ein Act passt nur zur Frage, wenn sein Genre oder seine Beschreibung ausdrücklich dazu passt. Nenne nur passende Acts und lass die anderen weg.
 
+Schreibe einem Act nur Eigenschaften zu, die wörtlich in seinem Genre oder seiner Beschreibung stehen. Wenn nur ein Act passt, nenne nur diesen einen.
+
 Nenne Acts beim Namen, nicht über ihre Nummer, jeweils mit Tag, Uhrzeit und Bühne.
 
 Antworte auf Deutsch in höchstens drei Sätzen, als Fließtext ohne Formatierung.
@@ -552,6 +554,7 @@ Warum diese Regeln:
 | Informationen reichen nicht | B10: ist die Frage aus dem Kontext nicht beantwortbar, sagt die Antwort das – statt zu raten (z. B. bei Fragen zu Tickets, Anreise oder „heute Abend", siehe Scope in `requirements.md`). |
 | Status beachten | Nutzt den serverseitig berechneten Status (Kontextdaten), damit Vergangenes nicht als Empfehlung erscheint (B10). Als Liste je Statuswert, weil die allgemeine Formulierung im Test ignoriert wurde. |
 | nur passende Acts | Die Suche liefert immer bis zu 5 Artists ohne Mindest-Ähnlichkeit (B8) – schwache Treffer sind normal und sollen nicht in die Antwort rutschen. „Ausdrücklich" an Genre/Beschreibung gebunden, weil das Modell sonst Eigenschaften dazuerfand („Jazz Corner … auch mit Blasinstrumenten"). |
+| nur wörtliche Eigenschaften | Schritt 11: gegen angedichtete Eigenschaften („Moonlight Session … ebenfalls Blasinstrumente"), die die Prüfung im Code nicht erkennen kann. Im Prüfset half die Regel beim echten Fall mit Neon-Daten (2 von 2), beim Mock-Fall nicht (siehe „Halluzinationsschutz"). |
 | Acts beim Namen | Entscheidung 2026-09-25: Namen statt Nummern – der Besucher sieht in der Trefferliste Titel, keine Nummern. Tag/Uhrzeit/Bühne beantworten „wo, was, wann". |
 | Deutsch, höchstens drei Sätze, ohne Formatierung | T5 (Deutsch). Kein Markdown, weil das Frontend Text per `textContent` ausgibt und Formatierung roh erscheinen würde. Feste Satzgrenze statt „kurz", weil „kurz" im Test bis zu fünf Sätze ergab; die Details zeigt ohnehin die Trefferliste darunter. |
 
@@ -673,6 +676,51 @@ verweigert"; nicht vorhandenes Modell → `LLMUnavailableError` „HTTP Error 40
 nah an den 60 s. Wird das Zeitlimit in der Praxis gerissen, ist der erste Hebel, das Modell
 beim App-Start vorzuladen, nicht das Limit hochzusetzen.
 
+### Fehlerfälle und Halluzinationsschutz (Roadmap-Schritt 11)
+
+Fehlerfälle, die schon vorher abgedeckt waren: keine Treffer → kein LLM-Aufruf (`no_hits`);
+Ollama nicht erreichbar, Zeitlimit, HTTP-Fehler, unbrauchbare Antwort → `unavailable`
+(Schritte 8 und 9). Neu ist der Schutz gegen **erfundene Informationen**, auf zwei Ebenen:
+
+**1. Prüfung im Code nach dem LLM-Aufruf** – `app/llm.py::find_ungrounded()`, aufgerufen in
+`generate_answer()`. Deterministisch und getestet; findet sie etwas, wirft `generate_answer()`
+`UngroundedAnswerError` (Unterklasse von `LLMUnavailableError`), die API antwortet
+`unavailable`, der Grund samt verworfener Antwort landet im Server-Log. Geprüft wird:
+
+| Prüfung | Wie |
+|---|---|
+| Act außerhalb der Treffer | jeder bekannte Artist-Name (`crud.list_artist_names()`) in der Antwort muss unter den Treffern sein |
+| Bühne außerhalb der Treffer | jeder bekannte Bühnenname (`crud.list_stages()`) in der Antwort muss bei einem Treffer vorkommen |
+| Uhrzeit, Datum, Wochentag | jedes `HH:MM`, `TT.MM.` und jeder ausgeschriebene Wochentag in der Antwort muss Start oder Ende eines Treffers sein |
+| vergangener Act als bevorstehend | wird ein Act mit Status `vorbei` genannt, muss die Antwort „vorbei", „gespielt" oder „stattgefunden" enthalten |
+| „läuft gerade" ohne laufenden Act | „läuft gerade/jetzt" in der Antwort nur, wenn ein Treffer tatsächlich läuft |
+
+Bewusst grob: kein Satz- oder Grammatikverständnis, nur Abgleich von Namen und Zahlen. Das
+reicht, um die im Test beobachteten Fehler zu fangen, ohne korrekte Antworten zu verwerfen
+(siehe Prüfset). **Nicht erkennbar:** angedichtete Eigenschaften („Jazz Corner … mit
+Blasinstrumenten") – dafür gibt es nur die Prompt-Regel.
+
+**2. Prompt-Regel** „Schreibe einem Act nur Eigenschaften zu, die wörtlich in seinem Genre
+oder seiner Beschreibung stehen. Wenn nur ein Act passt, nenne nur diesen einen." (siehe
+System-Prompt).
+
+**Prüfset** (Wegwerf-Skript, nicht eingecheckt): die 7 Mock-Fälle aus Schritt 6 plus 3 Fragen
+mit echten Suchtreffern aus Neon, je 2 Durchläufe gegen `qwen3-instruct:4b`, automatische
+Auswertung mit `find_ungrounded()` und einer groben Markierung für angedichtete Bläser.
+
+| Stand | durchgelassen | verworfen | angedichtete Eigenschaft (durchgelassen) |
+|---|---|---|---|
+| vorher (Prompt aus Schritt 6, mit Prüfung) | 18 | 2 (R1: vergangene Morning Brass ohne „vorbei") | 2 (A) |
+| mit Eigenschafts-Regel | 20 | 0 – R1 jetzt korrekt, Moonlight Session ohne Bläser | 2 (A) |
+| endgültig (Regel + „läuft gerade"-Prüfung) | 19 | 1 (B: „Night Owls läuft gerade", beginnt erst 23:00) | 2 (A) |
+
+Keine korrekte Antwort wurde verworfen (u. a. „Wann hat Morning Brass gespielt?" geht durch).
+**Bekannte Grenze:** Im Mock-Fall A („Blasinstrumente" mit Sunday Swing und Jazz Corner als
+schwachen Treffern) schreibt das 4B-Modell diesen Acts weiterhin Blasinstrumente zu, trotz
+Regel. Hinnehmbar, weil Name, Tag, Zeit und Bühne stimmen (sonst würde die Prüfung greifen)
+und Genre/Beschreibung in der Trefferliste direkt darunter stehen; verbessern ließe es sich
+nur mit einem stärkeren Modell oder weniger schwachen Treffern im Kontext.
+
 ## Frontend
 
 - Beim Laden: `GET /api/stages` und `GET /api/days` für die beiden Dropdowns, dann
@@ -790,7 +838,11 @@ im Importpfad – daher keine `conftest.py` und keine `pytest.ini` nötig.
   Dazu der Ollama-Aufruf (Roadmap-Schritt 8) mit Fake-`send` bzw. gepatchtem `urlopen`:
   Request mit Modell, `stream`/`think` aus und Temperatur, Zeitlimit wird übergeben, Antwort
   wird getrimmt; nicht erreichbar, Zeitlimit, HTTP-Fehler, kein JSON, unerwartete oder leere
-  Antwort → `LLMUnavailableError`; ohne Treffer wird kein LLM aufgerufen.
+  Antwort → `LLMUnavailableError`; ohne Treffer wird kein LLM aufgerufen. Dazu die Prüfung
+  `find_ungrounded()` (Roadmap-Schritt 11): korrekte Antwort ohne Befund, Act oder Bühne
+  außerhalb der Treffer, erfundene Uhrzeit, Datum und Wochentag, vergangener Act ohne
+  „vorbei", „Wann hat X gespielt?" bleibt erlaubt, „läuft gerade" nur mit laufendem Treffer;
+  `generate_answer()` wirft bei Befund `UngroundedAnswerError`.
 - `tests/test_search_api.py` – `GET /api/search` (Roadmap-Schritt 11): fehlendes, leeres oder
   nur aus Leerzeichen bestehendes `q` wird mit `422` abgelehnt, keine Treffer liefert eine
   leere Liste, Treffer erscheinen in der vorgegebenen Artist-Reihenfolge mit korrektem
@@ -801,7 +853,8 @@ im Importpfad – daher keine `conftest.py` und keine `pytest.ini` nötig.
   nur Leerzeichen → `422`; ohne Treffer `no_hits` und das LLM wird nicht aufgerufen; mit
   Treffern `ok` mit getrimmter Antwort, und der an das LLM gesendete Kontext enthält den Act,
   den aus `festival_now` berechneten Status und die getrimmte Frage am Ende; LLM nicht
-  verfügbar → `unavailable`; `/api/search` bleibt unverändert. Ersetzt `search_artist_ids`,
+  verfügbar → `unavailable`; eine Antwort mit erfundener Uhrzeit → `unavailable`;
+  `/api/search` bleibt unverändert. Ersetzt `search_artist_ids`,
   `festival_now` und `llm_send` per `dependency_overrides`.
 - `tests/test_api.py` – wenige Tests: Sortierung, Bühnen- und Tagesfilter (auch kombiniert),
   Bühnen- und Tagesliste, `status` im JSON (auch innerhalb eines gewählten Tages).

@@ -1,4 +1,4 @@
-"""Database queries: stage list, day list, program list (joins over Artist/Stage), artist list.
+"""Database queries: stage list, day list, program list (joins over Artist/Stage), artist lists.
 
 Program rows come back already flattened to `title`/`stage` - the API
 contract stays flat (see architecture.md, T-4), so callers don't need to
@@ -62,6 +62,12 @@ def list_program(db: Session, stage: str | None = None, day: date | None = None)
         day_start, day_end = day_bounds(day)
         query = query.filter(Act.starts_at >= day_start, Act.starts_at < day_end)
     return query.all()
+
+
+def list_artist_names(db: Session) -> list[str]:
+    """All artist names, e.g. to spot acts in a generated answer that are not among its hits."""
+    rows = db.query(Artist.name).order_by(Artist.name).all()
+    return [row[0] for row in rows]
 
 
 def list_artists(db: Session) -> list[Artist]:

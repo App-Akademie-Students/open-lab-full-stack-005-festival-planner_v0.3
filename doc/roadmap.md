@@ -121,7 +121,14 @@
   echten Server + Ollama, Screenshots) – damit auch der offene Live-Browsertest aus Phase 1
   nachgeholt. Details: `doc/architecture.md` („Frontend", „Browsertest")
 
-11 Fehlerfälle / Halluzinationsschutz – keine Treffer, Timeout, keine erfundenen Informationen
+11 Fehlerfälle / Halluzinationsschutz – keine Treffer, Timeout, keine erfundenen Informationen – erledigt (2026-09-25):
+  keine Treffer/Timeout/Ausfall waren schon abgedeckt. Neu: Prüfung `find_ungrounded()` nach
+  dem LLM-Aufruf (Acts, Bühnen, Uhrzeiten, Daten, Wochentage nur aus den Treffern; vergangener
+  Act nur als vergangen; „läuft gerade" nur mit laufendem Treffer) – bei Befund wird die
+  Antwort verworfen (`unavailable`). Prompt-Regel gegen angedichtete Eigenschaften. Prüfset
+  (10 Fragen × 2 gegen das echte Modell): keine korrekte Antwort verworfen, echte Fehler
+  gefangen; Grenze: angedichtete Eigenschaften bei schwachen Treffern (Mock-Fall A). 12 neue
+  Tests (108 grün). Details: `doc/architecture.md` („Fehlerfälle und Halluzinationsschutz")
 
 12 Tests – Kontextaufbau, LLM-Aufruf, API und Fehlerfälle testen; LLM-Aufruf mocken
 
