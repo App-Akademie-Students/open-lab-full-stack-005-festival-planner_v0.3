@@ -9,16 +9,25 @@ Ollama is called over its HTTP API with `urllib` from the standard library, so n
 dependency is needed for a single POST request.
 """
 import json
+import os
 import re
 import urllib.request
 from collections.abc import Iterable
 from collections.abc import Callable
 from datetime import datetime
 
+from dotenv import load_dotenv
+
 from app.schedule import act_phase, festival_day
 
-OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
-MODEL_NAME = "qwen3-instruct:4b"
+load_dotenv()
+
+# Where Ollama runs and which model it uses come from .env (OLLAMA_URL, OLLAMA_MODEL).
+# Unlike DATABASE_URL, both have defaults: the LLM is optional (B10), and the app and tests
+# must work without these entries. OLLAMA_URL must stay a local Ollama (T5).
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_CHAT_URL = f"{OLLAMA_URL}/api/chat"
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen3-instruct:4b")
 # Low temperature: as little embellishment as possible (roadmap phase 2 step 6).
 TEMPERATURE = 0.2
 # Answers took 2-35 s on the dev machine, plus ~8 s model loading on the first call (step 6).

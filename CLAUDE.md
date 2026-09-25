@@ -116,8 +116,11 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   Modells importiert, damit App-Start und Tests PyTorch nicht laden. Tests nutzen einen
   Fake-Encoder statt des echten Modells.
 * **LLM-Aufruf (Vektorsuche Phase 2, Roadmap-Schritt 8):** `app/llm.py` ruft Ollama
-  (`http://127.0.0.1:11434/api/chat`, Modell `qwen3-instruct:4b`, Temperatur 0.2,
+  (`<OLLAMA_URL>/api/chat`, Modell `OLLAMA_MODEL`, Temperatur 0.2,
   `think: false`) per `urllib` aus der Standardbibliothek auf – keine neue Dependency.
+  `OLLAMA_URL` und `OLLAMA_MODEL` kommen aus `.env`, mit Standardwerten
+  (`http://127.0.0.1:11434`, `qwen3-instruct:4b`), weil das LLM optional ist (B10);
+  Temperatur und Zeitlimit bleiben Konstanten im Code.
   Zeitlimit 60 s. Jeder Fehler (nicht erreichbar, Zeitlimit, HTTP-Fehler, unbrauchbare
   Antwort) wird zu `LLMUnavailableError`; der Aufrufer zeigt dann „nicht verfügbar", die
   Suche bleibt unberührt (B10). Ohne Suchtreffer wird kein LLM aufgerufen. Der HTTP-Aufruf ist
@@ -243,9 +246,12 @@ pip install -r requirements-dev.txt   # Entwicklung inkl. pytest + httpx
 
 ```
 DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
+OLLAMA_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3-instruct:4b
 ```
 
-Verbindungsdaten kommen aus dem Neon-Projekt.
+Verbindungsdaten kommen aus dem Neon-Projekt. `OLLAMA_URL` und `OLLAMA_MODEL` sind optional
+(ohne sie gelten die gezeigten Werte).
 
 Einmalig die pgvector-Erweiterung in der Datenbank aktivieren (in Neon im SQL-Editor), sonst
 scheitern App-Start und Seed an `type "vector" does not exist`:

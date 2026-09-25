@@ -51,7 +51,7 @@ Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 | `app/db.py` | Engine, Session, `init_db()`; bricht ohne `DATABASE_URL` mit klarer Meldung ab |
 | `app/seed.py` | Seed-Skript: vier Festivaltage ab heute, 3 Bühnen, Genre und Beschreibung je Artist |
 | `app/embeddings.py` | Embedding-Text und -Modell; `python -m app.embeddings` erzeugt die Embeddings aller Artists |
-| `app/llm.py` | Generierte Antwort (Phase 2, in Arbeit): System-Prompt, Kontext aus den Suchtreffern, Ollama-Aufruf (`urllib`, Zeitlimit 60 s), Fehler als `LLMUnavailableError` |
+| `app/llm.py` | Generierte Antwort (Phase 2, in Arbeit): System-Prompt, Kontext aus den Suchtreffern, Ollama-Aufruf (`urllib`, Zeitlimit 60 s; Adresse und Modell über `OLLAMA_URL`/`OLLAMA_MODEL` in `.env`, mit Standardwerten), Fehler als `LLMUnavailableError` |
 | `static/` | `index.html`, `app.js`, erzeugtes `style.css` |
 | `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py`, `test_crud.py`, `test_search_api.py`, `test_llm.py`, `test_answer_api.py` (108 Tests) |
 

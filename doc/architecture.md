@@ -649,9 +649,13 @@ Alles in `app/llm.py`, ohne neue Dependency:
 - **HTTP-Client:** `urllib.request` aus der Standardbibliothek. Für einen einzigen POST an
   Ollamas `/api/chat` reicht das; `httpx` ist nur Dev-Dependency (TestClient) und hätte in die
   Laufzeit-Abhängigkeiten wandern müssen, das Paket `ollama` wäre eine neue Dependency (T1).
-- **Konfiguration als Konstanten** (wie `MODEL_NAME` in `embeddings.py`): `OLLAMA_CHAT_URL`
-  (`http://127.0.0.1:11434/api/chat`), `MODEL_NAME` (`qwen3-instruct:4b`), `TEMPERATURE` (0.2),
-  `TIMEOUT_SECONDS` (60). Kein `.env`-Eintrag, solange Ollama nur lokal läuft.
+- **Konfiguration:** Adresse und Modell kommen aus `.env` – `OLLAMA_URL` (Standard
+  `http://127.0.0.1:11434`, daraus `OLLAMA_CHAT_URL` = `<OLLAMA_URL>/api/chat`) und
+  `OLLAMA_MODEL` (Standard `qwen3-instruct:4b`, im Code `MODEL_NAME`). Anders als bei
+  `DATABASE_URL` gibt es Standardwerte: das LLM ist optional (B10), App und Tests laufen auch
+  ohne die Einträge. `OLLAMA_URL` muss auf ein lokales Ollama zeigen (T5). `TEMPERATURE` (0.2)
+  und `TIMEOUT_SECONDS` (60) bleiben Konstanten im Code – sie sind am Prompt bzw. an den
+  gemessenen Antwortzeiten abgestimmt, keine Umgebungseinstellung.
 - **`post_to_ollama(body)`** – der eigentliche HTTP-Aufruf. Jeder Fehler wird zu
   `LLMUnavailableError`: Verbindung abgelehnt (Ollama läuft nicht), HTTP-Fehler (z. B. 404,
   Modell nicht geladen), Zeitlimit überschritten, Antwort kein JSON.
@@ -879,9 +883,10 @@ im Importpfad – daher keine `conftest.py` und keine `pytest.ini` nötig.
   `app/infra/`, …) – bei 7 flachen Modulen noch kein klarer Vorteil; siehe
   „Erweiterungspunkte" für die Bedingungen, unter denen das sinnvoll wird. Die
   Pydantic-Antwortmodelle stehen deshalb weiter in `routers.py`, dem einzigen Nutzer (T-15).
-- `config.py` – `.env` gibt es inzwischen (`DATABASE_URL`), aber nur eine einzige Variable,
-  direkt in `db.py` gelesen; ein eigenes Konfigurationsmodul lohnt sich erst bei mehreren
-  Werten oder mehreren Umgebungen. Die Zeitzone bleibt eine Konstante im Code.
+- `config.py` – `.env` enthält inzwischen `DATABASE_URL` (gelesen in `db.py`) sowie
+  `OLLAMA_URL` und `OLLAMA_MODEL` (gelesen in `llm.py`); jedes Modul liest nur seine eigenen
+  Werte. Ein eigenes Konfigurationsmodul lohnt sich erst, wenn Werte modulübergreifend
+  gebraucht werden oder mehrere Umgebungen dazukommen. Die Zeitzone bleibt eine Konstante im Code.
 - Alembic-Migrationen – kommt, sobald Schemaänderungen nicht mehr per Löschen und
   Neu-Seeden gelöst werden sollen (z. B. produktive Daten, die erhalten bleiben müssen).
 - Jinja-Templates, npm/JS-Build-Tooling, Docker, `conftest.py` – kommen mit den jeweiligen
