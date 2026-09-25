@@ -10,7 +10,8 @@ sollen. Details stehen in den verlinkten Dokumenten unter `doc/`.
 - **Version/Phase:** v0.1 und v0.2 umgesetzt und reviewt. **v0.3 in Arbeit** – die
   Anforderungen liegen als Entwurf vor, fünf neue Stories sind umgesetzt (US-7 bis US-11).
 - **Neue Entwicklungsphase:** semantische Vektorsuche **(Phase 1 abgeschlossen und reviewt,
-  US-11)**, danach LLM/RAG (Phase 2, noch nicht begonnen) – siehe Abschnitt 6.
+  US-11)**, danach LLM/RAG (**Phase 2 begonnen**: Anforderungen und Modellwahl stehen) – siehe
+  Abschnitt 6.
 - Lernprojekt: schrittweise Entwicklung mit Claude, Dokumentation auf Deutsch, Code auf
   Englisch.
 
@@ -50,14 +51,18 @@ Ein Prozess (uvicorn) liefert API und Frontend aus. Flache Modulstruktur:
 | `app/db.py` | Engine, Session, `init_db()`; bricht ohne `DATABASE_URL` mit klarer Meldung ab |
 | `app/seed.py` | Seed-Skript: vier Festivaltage ab heute, 3 Bühnen, Genre und Beschreibung je Artist |
 | `app/embeddings.py` | Embedding-Text und -Modell; `python -m app.embeddings` erzeugt die Embeddings aller Artists |
+| `app/llm.py` | Generierte Antwort (Phase 2, in Arbeit): System-Prompt, Kontext aus den Suchtreffern, Ollama-Aufruf (`urllib`, Zeitlimit 60 s), Fehler als `LLMUnavailableError` |
 | `static/` | `index.html`, `app.js`, erzeugtes `style.css` |
-| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py`, `test_crud.py`, `test_search_api.py` (66 Tests) |
+| `tests/` | `test_schedule.py`, `test_models.py`, `test_api.py`, `test_seed.py`, `test_embeddings.py`, `test_crud.py`, `test_search_api.py`, `test_llm.py`, `test_answer_api.py` (96 Tests) |
 
 **API** (flacher JSON-Vertrag, `title`/`stage` als Strings):
 
 - `GET /api/program?stage=&day=YYYY-MM-DD` → `{ now, items: [{id, title, stage, starts_at, ends_at, status}] }`
 - `GET /api/stages` → Bühnennamen, alphabetisch
 - `GET /api/days` → Tage mit Acts, chronologisch
+- `GET /api/answer?q=` → generierte Antwort auf Basis derselben Suchtreffer (C12/B10, Phase 2):
+  `{ status: "ok" | "no_hits" | "unavailable", answer }`, immer `200`; ohne Treffer kein
+  LLM-Aufruf
 - `GET /api/search?q=` → semantische Suche (B8/F11):
   `{ items: [{id, title, stage, day, starts_at, ends_at}] }`, `q` Pflicht und nicht leer
 
@@ -111,6 +116,10 @@ Details: [`domain-model.md`](domain-model.md).
 - Responsive Oberfläche mit Tailwind CSS, ab 360 px ohne horizontales Scrollen (US-6, US-7).
 - Semantische Suche nach Acts in eigenen Worten (Suchbereich über den Favoriten), sortiert
   nach Ähnlichkeit, unterstützt deutsche Anfragen, kein LLM (C11, F11, B8, B9, T4; US-11).
+- Generierte Antwort zu einer Suche auf Knopfdruck („Antwort generieren"), nur aus den
+  Suchtreffern, lokal per Ollama (`qwen3-instruct:4b`); Hinweis, wenn das LLM nicht verfügbar
+  ist (C12, F12, B10, T5; Phase 2 – umgesetzt bis einschließlich Frontend, Halluzinationsschutz
+  und Review stehen noch aus).
 - Seed-Skript mit vier Festivaltagen ab heute, inkl. paralleler Acts und Acts über
   Mitternacht (US-1).
 - Datenhaltung in PostgreSQL (Neon) mit Verbindungs-Check gegen Neons Idle-Suspend.
@@ -142,16 +151,32 @@ Details: [`domain-model.md`](domain-model.md).
   (`app/routers.py`); Frontend-Anbindung in `static/app.js` (Mock-Daten aus Schritt 1 entfernt).
   Review: [`review.md`](review.md) Abschnitt 10, „Freigeben mit nicht blockierenden
   Änderungswünschen", keine Blocker; T-29 (veraltete, ungenutzte Regel in
-  `static/style.css`) ist erledigt, offen ist noch ein echter Live-Browsertest (auf
-  dieser Maschine kein Browser-Automatisierungstool verfügbar, ersatzweise per HTTP gegen den
-  echten Server geprüft).
+  `static/style.css`) ist erledigt; der zunächst fehlende Live-Browsertest ist am 2026-09-25
+  per Headless Chrome nachgeholt.
   `Suchanfrage → Embedding-Modell → Query-Vektor → PostgreSQL/pgvector → passende Acts`, kein
   LLM, keine generierte Antwort.
-  **Phase 2 – LLM/RAG: noch nicht begonnen.**
+  **Phase 2 – LLM/RAG: in Arbeit (Roadmap-Schritte 1–10 erledigt, 2026-09-25).**
+  Anforderungen C12, F12, B10, T5 in [`requirements.md`](requirements.md): Antwort nur auf
+  Knopfdruck („Antwort generieren") zu einer Suche mit Treffern, Kontext ausschließlich die
+  Suchtreffer, bei LLM-Ausfall bleiben die Treffer sichtbar, kein Chat. LLM: `qwen3-instruct:4b`
+  lokal über Ollama. Kontext: genau die Suchtreffer mit Name, Genre, Beschreibung, Bühne, Tag,
+  Zeiten und serverseitig berechnetem Status „vorbei / läuft gerade / kommt noch"
+  ([`architecture.md`](architecture.md), „Generierte Antwort"), als Klartext unter „Gefundene
+  Acts:", ein nummerierter Block pro Act (Artist, Genre, Beschreibung, Bühne, Zeit, Status),
+  Frage am Ende. System-Prompt als erster
+  Entwurf (u. a. nur Kontext, nichts erfinden, Status beachten, Acts beim Namen, kurz auf
+  Deutsch). Modell mit Mock-Kontext ausprobiert: nichts erfunden; vergangene Acts stehen im
+  Kontext hinten (danach nicht mehr empfohlen), schwach passende Acts werden teils noch
+  mitgenannt; Zeitlimit 60 s (Antworten 2–35 s). Code: `app/llm.py` baut aus echten
+  Suchtreffern Kontext und Nachrichten (getestet); End-to-End gegen Neon + Ollama
+  funktioniert; der Ollama-Aufruf samt Fehlerbehandlung ist im Backend (`generate_answer()`)
+  und über `GET /api/answer?q=` erreichbar (erster Aufruf ca. 74 s wegen Modell-Laden, danach
+  17–22 s). Frontend: Button „Antwort generieren" über der Trefferliste, im echten Browser
+  (Headless Chrome, 360 px) geprüft.
   `Suchanfrage → Vektorsuche → passende Acts → LLM-Kontext → generierte Antwort`. Die
   Vektorsuche bleibt die Retrieval-Schicht; das LLM darf keine Festivalinformationen erfinden,
   die nicht in den gefundenen Daten stehen.
-- Tests: `python -m pytest`, 66 grün (Stand 2026-09-24).
+- Tests: `python -m pytest`, 96 grün (Stand 2026-09-25).
 
 ## 7. Offene Entscheidungen und bekannte Probleme
 
@@ -171,6 +196,11 @@ Details: [`domain-model.md`](domain-model.md).
 
 **Bekannte Einschränkungen:**
 
+- Generierte Antwort (Phase 2, noch nicht umgesetzt): Das 4B-Modell nennt teils auch schwach
+  passende Suchtreffer und hat im End-to-End-Test einem Act eine Eigenschaft angedichtet
+  („Moonlight Session … mit Blasinstrumenten"); Acts, Bühnen und Zeiten hat es bisher nicht
+  erfunden. Wird in Roadmap-Schritt 11 (Halluzinationsschutz) angegangen.
+
 - Tests decken die PostgreSQL-spezifische Infrastruktur (URL-Normalisierung, psycopg) nicht
   ab, da sie gegen In-Memory-SQLite laufen; auch sie brauchen trotzdem eine gesetzte
   `DATABASE_URL`.
@@ -181,16 +211,15 @@ Details: [`domain-model.md`](domain-model.md).
 
 ## 8. Nächste geplante Schritte
 
-1. Die Suche einmal live im Browser prüfen, sobald ein Browser-Automatisierungstool
-   verfügbar ist.
-2. Vektorsuche Phase 2 (LLM/RAG) nach [`roadmap.md`](roadmap.md) beginnen – frühestens jetzt
-   erlaubt, da Phase 1 reviewt und freigegeben ist (siehe `CLAUDE.md`, „Development Rule").
-3. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
-4. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
+1. Vektorsuche Phase 2 (LLM/RAG) nach [`roadmap.md`](roadmap.md) abschließen: Fehlerfälle
+   und Halluzinationsschutz (Schritt 11, u. a. der Fall „Blasinstrumente"), Tests (Schritt 12),
+   Review und Dokumentation (Schritt 13).
+2. Offene Fragen des v0.3-Entwurfs klären (siehe Abschnitt 7).
+3. Restliche v0.3-Anforderungen als User Stories ins Backlog übernehmen und priorisieren:
    - mehrere Festivals + Festivalauswahl (C4, C5, F5, B5, B6) – zurückgestellt,
    - Datenimport über einen geschützten Backend-Zugang (B7),
    - Offline-Verfügbarkeit (C9, F10).
-5. Die Festival-Entität erfordert eine Erweiterung von Domain Model und Architektur (neue
+4. Die Festival-Entität erfordert eine Erweiterung von Domain Model und Architektur (neue
    Entität, FKs von `Stage`/`Act`) – vor der Umsetzung dokumentieren.
 
 Weitere Quellen: [`../CLAUDE.md`](../CLAUDE.md), [`requirements.md`](requirements.md),

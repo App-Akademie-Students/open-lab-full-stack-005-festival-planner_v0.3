@@ -32,8 +32,12 @@ auf Weiteres zurückgestellt.
 
 **Vektorsuche und LLM:** Phase 1 (semantische Suche, `GET /api/search?q=`, kein LLM) ist
 vollständig umgesetzt, getestet und reviewt (US-11, siehe oben) – Details und Einzelschritte in
-`doc/roadmap.md`. Phase 2 (LLM/RAG) darf laut „Development Rule" unten jetzt begonnen werden,
-ist aber noch nicht gestartet.
+`doc/roadmap.md`. Phase 2 (LLM/RAG) ist in Arbeit: Anforderungen (C12, F12, B10, T5 in
+`doc/requirements.md`), Modellwahl (`qwen3-instruct:4b` über Ollama), Prompt und Kontextformat
+stehen; `app/llm.py` baut Kontext und Nachrichten aus den Suchtreffern und ruft Ollama auf
+(Roadmap-Schritte 7 und 8); `GET /api/answer?q=` liefert die Antwort (Schritt 9), das Frontend
+fordert sie per Button „Antwort generieren" an (Schritt 10). Noch offen: Halluzinationsschutz,
+Tests, Review (Schritte 11–13).
 
 Ab Phase 2 gilt eine neue Leitlinie für die Architektur: nicht mehr „so klein wie möglich"
 (MVP), sondern gut strukturiert und erweiterbar – die Struktur wächst Schritt für Schritt mit
@@ -50,6 +54,8 @@ Nach jeder Story/Aufgabe den Status in `doc/backlog.md` aktualisieren.
 * pgvector (PostgreSQL-Erweiterung + Python-Paket `pgvector`) für die Vektorsuche;
   Embedding-Modell `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 Dimensionen),
   lokal über `sentence-transformers` (PyTorch)
+* Ollama mit dem Modell `qwen3-instruct:4b` für die generierte Antwort (Vektorsuche Phase 2,
+  lokal; noch nicht angebunden)
 * HTML + Tailwind CSS (v4, CSS wird mit der Tailwind-CLI erzeugt – einziger Build-Schritt)
 * Vanilla JavaScript – kein JS-Framework, kein JS-Build
 
@@ -109,6 +115,13 @@ Nur für die Entwicklung (bewusste Ausnahme von T1 in `doc/requirements.md`):
   die Vektoren sind auf Länge 1 normiert. `sentence_transformers` wird erst beim Laden des
   Modells importiert, damit App-Start und Tests PyTorch nicht laden. Tests nutzen einen
   Fake-Encoder statt des echten Modells.
+* **LLM-Aufruf (Vektorsuche Phase 2, Roadmap-Schritt 8):** `app/llm.py` ruft Ollama
+  (`http://127.0.0.1:11434/api/chat`, Modell `qwen3-instruct:4b`, Temperatur 0.2,
+  `think: false`) per `urllib` aus der Standardbibliothek auf – keine neue Dependency.
+  Zeitlimit 60 s. Jeder Fehler (nicht erreichbar, Zeitlimit, HTTP-Fehler, unbrauchbare
+  Antwort) wird zu `LLMUnavailableError`; der Aufrufer zeigt dann „nicht verfügbar", die
+  Suche bleibt unberührt (B10). Ohne Suchtreffer wird kein LLM aufgerufen. Der HTTP-Aufruf ist
+  als `send` austauschbar; Tests brauchen kein laufendes Ollama.
 * **Caching statischer Dateien:** `app/main.py` liefert `static/` mit `Cache-Control: no-cache`
   aus (`NoCacheStaticFiles`). Ohne den Header cacht der Browser `app.js`/`style.css`
   heuristisch und fragt sie nach einer Frontend-Änderung gar nicht erst neu an – dann läuft die
@@ -137,7 +150,7 @@ sobald ein konkreter Bedarf besteht (nicht spekulativ auf Vorrat):
 
 | Bereich | Ort |
 |---|---|
-| API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`, `GET /api/search?q=`) | `app/routers.py` |
+| API (`GET /api/program?stage=&day=`, `GET /api/stages`, `GET /api/days`, `GET /api/search?q=`, `GET /api/answer?q=`) | `app/routers.py` |
 | App-Objekt, Lifespan, bindet Router + `static/` ein | `app/main.py` |
 | Datenbank-Infrastruktur: Engine (PostgreSQL/Neon, `DATABASE_URL` aus `.env`), Session, `init_db()` | `app/db.py` |
 | ORM-Modelle `Artist` (inkl. `genre`, `description`, `embedding`), `Stage`, `Act`; `EMBEDDING_DIM` | `app/models.py` |
@@ -145,6 +158,7 @@ sobald ein konkreter Bedarf besteht (nicht spekulativ auf Vorrat):
 | Business-Logik: Festival-Zeit, Festivaltag, Status „now" / „next" (reine Funktionen, ohne DB/HTTP) | `app/schedule.py` |
 | Seed-Skript (vier Festivaltage ab dem heutigen Datum) | `app/seed.py` |
 | Embeddings: Embedding-Text, Modell, Embeddings aller Artists erzeugen | `app/embeddings.py` |
+| Generierte Antwort (Phase 2): System-Prompt, Kontext aus Suchtreffern, Chat-Nachrichten | `app/llm.py` |
 | Frontend (HTML/Vanilla JS, erzeugtes `style.css`) | `static/` |
 | Tailwind-Quelle für `static/style.css` | `tailwind/input.css` |
 | Tests | `tests/` |
@@ -265,6 +279,19 @@ python -m app.embeddings
 
 Nach jedem Seed ausführen: Erzeugt die Embeddings aller Artists neu (der Seed legt sie leer
 an). Beim ersten Lauf wird das Modell von Hugging Face heruntergeladen (ca. 470 MB).
+
+### Start Ollama (nur für die generierte Antwort)
+
+Ollama installieren (<https://ollama.com>), einmalig das Modell laden und Ollama laufen lassen
+(unter Windows startet es meist automatisch im Hintergrund):
+
+```bash
+ollama pull qwen3-instruct:4b
+ollama serve        # falls Ollama nicht schon läuft
+```
+
+Ohne laufendes Ollama funktionieren Programm und Suche weiterhin; nur die generierte Antwort
+ist dann „nicht verfügbar".
 
 ### Start backend
 

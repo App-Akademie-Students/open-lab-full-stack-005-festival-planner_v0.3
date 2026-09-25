@@ -103,3 +103,15 @@ def test_acts_for_artists_includes_acts_already_ended(db):
     rows = crud.acts_for_artists(db, [artist.id])
 
     assert [row.title for row in rows] == ["Ambient Drift"]
+
+
+def test_acts_for_artists_includes_genre_and_description(db):
+    # Needed for the generated answer's context (B10, app/llm.py).
+    stage = Stage(name="Zeltbühne")
+    artist = Artist(name="Ambient Drift", genre="Ambient", description="Schwebende Klangflächen.")
+    db.add(build_act(artist, stage, datetime(2026, 9, 18, 13, 0), datetime(2026, 9, 18, 14, 0)))
+    db.commit()
+
+    [row] = crud.acts_for_artists(db, [artist.id])
+
+    assert (row.genre, row.description) == ("Ambient", "Schwebende Klangflächen.")

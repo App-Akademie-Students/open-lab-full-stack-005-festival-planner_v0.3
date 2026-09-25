@@ -262,7 +262,7 @@ function formatDay(isoDate) {
 }
 
 // Semantic search (C11, F11): calls GET /api/search?q=, replacing the frontend mock from
-// vector search phase 1, step 1.
+// vector search phase 1, step 1. Below the hits, the generated answer (C12, F12) on demand.
 function initSearch() {
   const input = document.getElementById("search-input");
   document.getElementById("search-form").addEventListener("submit", (event) => {
@@ -274,14 +274,18 @@ function initSearch() {
     input.value = event.currentTarget.textContent;
     runSearch(input.value.trim());
   });
+  document.getElementById("answer-button").addEventListener("click", requestAnswer);
 }
 
 // Counts runSearch() calls, same reasoning as latestProgramRequest: only the answer to the
 // latest search may render, in case an earlier request is still in flight.
 let latestSearchRequest = 0;
+// The query of the latest search: the generated answer is requested for exactly this query.
+let latestSearchQuery = "";
 
 async function runSearch(query) {
   const request = ++latestSearchRequest;
+  latestSearchQuery = query;
   const hasQuery = query !== "";
 
   document.getElementById("search-results-heading").textContent =
@@ -293,6 +297,7 @@ async function runSearch(query) {
   document.getElementById("search-list").innerHTML = "";
   document.getElementById("search-list").hidden = true;
   document.getElementById("search-results").hidden = false;
+  resetAnswer(); // F12: a new search removes a previous answer
 
   if (!hasQuery) return; // F11: empty query shows a hint instead of searching
 
@@ -311,6 +316,51 @@ function renderSearchResults(items) {
   }
   document.getElementById("search-no-results").hidden = items.length > 0;
   list.hidden = items.length === 0;
+  // F12: the answer can only be requested when there are hits to base it on.
+  document.getElementById("answer").hidden = items.length === 0;
+}
+
+// Generated answer (C12, F12): requested only on click, because it can take up to the LLM
+// timeout (60 s) while the search itself stays fast. GET /api/answer runs the same search
+// again and answers { status: "ok" | "no_hits" | "unavailable", answer }.
+function resetAnswer() {
+  document.getElementById("answer").hidden = true;
+  document.getElementById("answer-button").hidden = false;
+  document.getElementById("answer-loading").hidden = true;
+  document.getElementById("answer-box").hidden = true;
+  document.getElementById("answer-text").textContent = "";
+  document.getElementById("answer-unavailable").hidden = true;
+}
+
+async function requestAnswer() {
+  // Tied to the search it belongs to: if a new search starts meanwhile, this answer is dropped.
+  const request = latestSearchRequest;
+  const query = latestSearchQuery;
+
+  document.getElementById("answer-button").hidden = true;
+  document.getElementById("answer-unavailable").hidden = true;
+  document.getElementById("answer-loading").hidden = false;
+
+  let data;
+  try {
+    const response = await fetch(`/api/answer?${new URLSearchParams({ q: query })}`);
+    data = response.ok ? await response.json() : { status: "unavailable" };
+  } catch {
+    data = { status: "unavailable" }; // network error: same hint as an unavailable LLM
+  }
+  if (request !== latestSearchRequest) return; // stale answer, a newer search replaced it
+
+  document.getElementById("answer-loading").hidden = true;
+  if (data.status === "ok") {
+    // textContent, not innerHTML: the LLM's text is shown as plain text, never as markup.
+    document.getElementById("answer-text").textContent = data.answer;
+    document.getElementById("answer-box").hidden = false;
+  } else {
+    // "unavailable" (or "no_hits" if the data changed since the search): hint, hits stay.
+    // The button comes back so the visitor can try again.
+    document.getElementById("answer-unavailable").hidden = false;
+    document.getElementById("answer-button").hidden = false;
+  }
 }
 
 function renderSearchResult(item, rank) {

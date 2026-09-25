@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from app.schedule import compute_statuses, day_bounds, festival_day
+from app.schedule import act_phase, compute_statuses, day_bounds, festival_day
 
 
 @dataclass
@@ -77,3 +77,22 @@ def test_day_bounds_cover_exactly_one_day():
     start, end = day_bounds(date(2026, 9, 11))
     assert start == datetime(2026, 9, 11, 0, 0)
     assert end == datetime(2026, 9, 12, 0, 0)
+
+
+def test_act_phase_before_start_is_upcoming():
+    assert act_phase(dt(12, 0), dt(13, 0), dt(11, 59)) == "upcoming"
+
+
+def test_act_phase_exactly_at_start_is_running():
+    assert act_phase(dt(12, 0), dt(13, 0), dt(12, 0)) == "running"
+
+
+def test_act_phase_exactly_at_end_is_past():
+    # Same boundary as compute_statuses(): an act is no longer running at its end time.
+    assert act_phase(dt(12, 0), dt(13, 0), dt(13, 0)) == "past"
+
+
+def test_act_phase_past_midnight_is_running_after_midnight():
+    starts_at = datetime(2026, 9, 11, 23, 0)
+    ends_at = datetime(2026, 9, 12, 1, 0)
+    assert act_phase(starts_at, ends_at, datetime(2026, 9, 12, 0, 30)) == "running"

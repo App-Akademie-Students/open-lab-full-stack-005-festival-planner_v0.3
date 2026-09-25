@@ -101,7 +101,8 @@ def search_top_artists(
 def acts_for_artists(db: Session, artist_ids: list[int]):
     """Acts of the given artists, ordered like `artist_ids` and chronologically within an artist.
 
-    Same flat row shape as `list_program()`: `.id`, `.title`, `.stage`, `.starts_at`, `.ends_at`.
+    Same flat row shape as `list_program()`: `.id`, `.title`, `.stage`, `.starts_at`, `.ends_at`,
+    plus `.genre` and `.description` of the artist for the generated answer's context (B10).
     Used for the search result (B8): every act of a matching artist is a hit, independent of any
     day/stage filter, including acts that have already ended - unlike `list_program()`, this is
     a fixed personal-style result list, not the filterable program (consistent with the
@@ -118,6 +119,8 @@ def acts_for_artists(db: Session, artist_ids: list[int]):
             Act.starts_at,
             Act.ends_at,
             Act.artist_id,
+            Artist.genre,
+            Artist.description,
         )
         .join(Artist)
         .join(Stage)

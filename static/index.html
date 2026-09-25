@@ -55,6 +55,20 @@
         <p id="search-empty" class="mt-2 text-sm text-gray-600" hidden>Bitte gib eine Suchanfrage ein.</p>
         <p id="search-loading" class="mt-2 text-sm text-gray-600" hidden>Suche läuft…</p>
         <p id="search-no-results" class="mt-2 text-sm text-gray-600" hidden>Keine passenden Acts gefunden.</p>
+        <!-- Generated answer (C12, F12): only on demand, via GET /api/answer?q= in app.js.
+             Shown above the hit list, which stays visible as the basis of the answer. -->
+        <div id="answer" class="mt-2" hidden>
+          <button id="answer-button" type="button"
+                  class="min-h-11 rounded-lg border border-indigo-300 bg-white px-4 text-sm font-semibold text-indigo-800 shadow-sm hover:bg-indigo-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">
+            Antwort generieren
+          </button>
+          <p id="answer-loading" class="text-sm text-gray-600" hidden>Antwort wird generiert… Das kann bis zu einer Minute dauern.</p>
+          <div id="answer-box" class="rounded-lg border border-indigo-200 bg-indigo-50 p-3" hidden>
+            <p class="text-xs font-semibold text-indigo-800">Generierte Antwort – auf Basis der Treffer unten</p>
+            <p id="answer-text" class="mt-1 text-sm break-words text-gray-800"></p>
+          </div>
+          <p id="answer-unavailable" class="mt-2 text-sm text-gray-600" hidden>Die Antwort ist gerade nicht verfügbar. Die Treffer unten sind davon nicht betroffen.</p>
+        </div>
         <ol id="search-list" class="mt-2 divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200"></ol>
       </div>
     </section>

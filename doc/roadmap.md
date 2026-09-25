@@ -60,25 +60,66 @@
 
 ## Phase 2 – LLM Integration
 
-1 Requirement für LLM-Antwort ergänzen
+1 Requirement für LLM-Antwort ergänzen – erledigt (2026-09-25): C12, F12, B10, T5 und T1 in `requirements.md`.
+  Antwort nur auf Knopfdruck („Antwort generieren") zu einer Suche mit Treffern; Kontext sind
+  ausschließlich die Suchtreffer (inkl. Bühne/Tag/Zeiten); bei LLM-Ausfall bleiben die Treffer
+  sichtbar; kein Chat. Offen: Zeitlimit (klärt Schritt 6)
 
-2 LLM auswählen (manuell) - verwende OLLAMA - qwen3-instruct:4b
+2 LLM auswählen (manuell) – erledigt: Ollama, Modell `qwen3-instruct:4b` (in T1 aufgenommen)
 
-3 Festlegen, welche Retrieval-Daten an das LLM gehen
+3 Festlegen, welche Retrieval-Daten an das LLM gehen – erledigt (2026-09-25): genau die Suchtreffer
+  (Name, Genre, Beschreibung, Bühne, Tag, Start/Ende) plus serverseitig berechneter Status
+  „vorbei / läuft gerade / kommt noch", keine aktuelle Uhrzeit, keine IDs/Scores. Details:
+  `doc/architecture.md` (Abschnitt „Generierte Antwort (LLM/RAG)"), B10 ergänzt
 
-4 Kontextformat definieren
+4 Kontextformat definieren – erledigt (2026-09-25): Retrieval-Treffer als Klartext unter
+  „Gefundene Acts:", ein nummerierter Block pro Act (`1.` = Rang) mit den Zeilen Artist, Genre,
+  Beschreibung, Bühne, Zeit (Tag + Uhrzeit), Status; Frage am Ende der User-Nachricht, Regeln in
+  der System-Nachricht. Details und Beispiel: `doc/architecture.md` („Kontextformat")
 
-5 System-Prompt / Regeln definieren
+5 System-Prompt / Regeln definieren – erledigt (2026-09-25): erster Entwurf auf Basis des
+  Beispiel-Prompts (nur Kontext, nichts erfinden, sagen wenn Informationen nicht reichen, Status
+  beachten, nur passende Acts, Acts beim Namen mit Tag/Zeit/Bühne, kurz auf Deutsch ohne
+  Formatierung). Text und Begründung: `doc/architecture.md` („System-Prompt")
 
-6 LLM mit festem Mock-Kontext separat ausprobieren
+6 LLM mit festem Mock-Kontext separat ausprobieren – erledigt (2026-09-25): Wegwerf-Skript, 7
+  Testfragen gegen `qwen3-instruct:4b`. Nichts erfunden, Fragen außerhalb des Kontexts sauber
+  abgelehnt; Schwachstelle: vergangene und schwach passende Acts werden teils trotzdem genannt
+  (auch bei `llama3.1:8b`). Folgen: System-Prompt nachgeschärft (v2), Wochentag im Kontext
+  ausgeschrieben, Kontext nach Status sortiert (laufende/kommende vor vergangenen Acts – damit
+  tauchten vergangene Acts nicht mehr in Empfehlungen auf), Temperatur 0.2, Zeitlimit 60 s
+  (Antworten 2–35 s). Bekannte Einschränkung: schwach passende Acts werden teils mitgenannt.
+  Details: `doc/architecture.md` („Ausprobieren mit Mock-Kontext")
 
-7 Retrieval + LLM verbinden – Top-5-Treffer als Kontext an das LLM übergeben
+7 Retrieval + LLM verbinden – Top-5-Treffer als Kontext an das LLM übergeben – erledigt (2026-09-25):
+  `app/llm.py` (System-Prompt, `build_context()`, `build_messages()`), `schedule.act_phase()`,
+  `crud.acts_for_artists()` liefert zusätzlich Genre/Beschreibung; 11 neue Tests (77 grün).
+  End-to-End per Wegwerf-Skript gegen Neon + Ollama: Pipeline funktioniert; bei „Blasinstrumente"
+  nennt das Modell einen vergangenen Act ohne Hinweis und erfindet eine Eigenschaft
+  (→ Testfall für Schritt 11). Details: `doc/architecture.md` („Retrieval und LLM verbinden")
 
-8 LLM-Service im Backend integrieren – Ollama, Modell, Prompt und Fehlerbehandlung kapseln
+8 LLM-Service im Backend integrieren – Ollama, Modell, Prompt und Fehlerbehandlung kapseln – erledigt (2026-09-25):
+  `app/llm.py` ruft Ollama per `urllib` (keine neue Dependency) auf; `generate_answer()` als
+  Einstiegspunkt, alle Fehler (nicht erreichbar, Zeitlimit 60 s, HTTP-Fehler, kaputte/leere
+  Antwort) als `LLMUnavailableError`. 13 neue Tests (90 grün), manuell gegen echtes Ollama
+  geprüft (Antwort, nicht erreichbar, Modell fehlt). Details: `doc/architecture.md`
+  („LLM-Service im Backend")
 
-9 API erweitern – generierte Antwort zusätzlich zu den Suchtreffern zurückgeben
+9 API erweitern – generierte Antwort zusätzlich zu den Suchtreffern zurückgeben – erledigt (2026-09-25):
+  eigener Endpunkt `GET /api/answer?q=` (Antwort auf Knopfdruck, F12), `/api/search` unverändert.
+  Gleiche Suche, dann `generate_answer()`; immer `200` mit `{status: ok|no_hits|unavailable,
+  answer}`; ohne Treffer kein LLM-Aufruf. LLM als Dependency `llm_send()`. 6 neue Tests
+  (96 grün); gegen echten Server geprüft (erster Aufruf 74 s wegen Modell-Laden, danach
+  17–22 s). Details: `doc/architecture.md` („`GET /api/answer`")
 
-10 Frontend anbinden – Dummy-Antwort durch echte LLM-Antwort ersetzen
+10 Frontend anbinden – Dummy-Antwort durch echte LLM-Antwort ersetzen – erledigt (2026-09-25):
+  (keine Dummy-Antwort vorhanden, direkt echt angebunden) Button „Antwort generieren" unter
+  der Überschrift der Suchtreffer, nur bei Treffern; Ladehinweis, Antwort in abgesetztem Kasten
+  über der Trefferliste, Hinweis „gerade nicht verfügbar" mit erneutem Versuch; neue Suche
+  entfernt die Antwort, veraltete Antworten werden verworfen. `style.css` neu erzeugt.
+  Erstmals im echten Browser geprüft (Headless Chrome per DevTools-Protokoll, 360 px, gegen
+  echten Server + Ollama, Screenshots) – damit auch der offene Live-Browsertest aus Phase 1
+  nachgeholt. Details: `doc/architecture.md` („Frontend", „Browsertest")
 
 11 Fehlerfälle / Halluzinationsschutz – keine Treffer, Timeout, keine erfundenen Informationen
 

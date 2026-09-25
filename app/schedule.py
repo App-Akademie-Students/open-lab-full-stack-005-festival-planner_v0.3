@@ -1,4 +1,4 @@
-"""Business logic: festival time, festival days and 'now' / 'next' status.
+"""Business logic: festival time, festival days, 'now' / 'next' status and act phase.
 
 Pure functions only - no database, no HTTP - so they are testable without
 FastAPI or a database session.
@@ -48,3 +48,17 @@ def compute_statuses(items, now: datetime) -> list[str | None]:
         else:
             statuses.append(None)
     return statuses
+
+
+def act_phase(starts_at: datetime, ends_at: datetime, now: datetime) -> str:
+    """'past', 'running' or 'upcoming' - where a single act stands relative to `now`.
+
+    Unlike compute_statuses(), this does not depend on the other items: 'next' only makes sense
+    within the filtered program list, while the generated answer (B10) needs a fixed status per
+    search hit. Boundaries match compute_statuses(): running is starts_at <= now < ends_at.
+    """
+    if ends_at <= now:
+        return "past"
+    if starts_at <= now:
+        return "running"
+    return "upcoming"
