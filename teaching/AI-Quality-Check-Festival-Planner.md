@@ -43,7 +43,7 @@ sondern auch:
 
 ### Embeddings
 
-- [x] Für alle relevanten Artists existiert ein Embedding
+- [ ] Für alle relevanten Artists existiert ein Embedding
   - Beobachtung:
 - [ ] Jedes Embedding hat 384 Dimensionen
   - Beobachtung:
