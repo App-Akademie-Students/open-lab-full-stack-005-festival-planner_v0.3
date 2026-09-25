@@ -1,312 +1,287 @@
 # Code Challenge: AI Quality Check
 
-## Festival Planner mit semantischer Vektorsuche
-
-> Ausfüllbares Review-Protokoll für eine Code-Challenge von etwa 45–60 Minuten.
-
-## Review-Daten
-
-| Feld | Eintrag |
-|---|---|
-| Datum | |
-| Reviewende Person / Team | |
-| Repository / Branch | |
-| Commit | |
-| Testumgebung | |
-
 ## Ziel
 
-Der Festival Planner wird systematisch geprüft. Neben der normalen Funktionalität geht es besonders um die Frage, ob die semantische Suche fachlich sinnvolle, nachvollziehbare und robuste Ergebnisse liefert.
+Der Festival Planner mit semantischer Vektorsuche wird systematisch geprüft.
+
+Dabei betrachten wir nicht nur:
+
+- „Funktioniert die Anwendung?“
+
+sondern auch:
+
+- Liefert die semantische Suche sinnvolle Ergebnisse?
+- Sind Grenzfälle berücksichtigt?
+- Ist die Architektur nachvollziehbar?
+- Ist der Code wartbar?
+- Sind AI-Komponenten kontrollierbar und testbar?
 
 ---
 
-## 1. Funktionsprüfung
+## 1. Funktionaler Check
 
-- [ ] Anwendung startet ohne Fehler.
-- [ ] Festival-Line-up wird angezeigt.
-- [ ] Acts können dem persönlichen Plan hinzugefügt werden.
-- [ ] Acts können aus dem Plan entfernt werden.
-- [ ] Zeitkonflikte werden erkannt.
-- [ ] Der persönliche Plan bleibt gespeichert.
-- [ ] Die semantische Suche kann ausgeführt werden.
-- [ ] Suchergebnisse werden korrekt im Frontend angezeigt.
-
-### Beobachtungen
-
-- 
-
----
-
-## 2. Embeddings
-
-- [ ] Für alle relevanten Artists existiert ein Embedding.
-- [ ] Jedes Embedding besitzt 384 Dimensionen.
-- [ ] Für den Embedding-Text werden `name`, `genre` und `description` verwendet.
-- [ ] Der erzeugte Embedding-Text ist einheitlich aufgebaut.
-- [ ] Fehlende optionale Texte verursachen keinen Fehler.
-- [ ] Embeddings werden gespeichert und nicht bei jeder Suche vollständig neu erzeugt.
-- [ ] Das verwendete Embedding-Modell ist zentral konfiguriert oder dokumentiert.
-
-### Stichprobe
-
-| Artist | Genre vorhanden | Beschreibung vorhanden | Embedding vorhanden | 384 Dimensionen | Bemerkung |
-|---|---:|---:|---:|---:|---|
-| | ☐ | ☐ | ☐ | ☐ | |
-| | ☐ | ☐ | ☐ | ☐ | |
-| | ☐ | ☐ | ☐ | ☐ | |
+- [ ] Anwendung startet ohne Fehler
+  - Problem / Beobachtung:
+- [ ] Festival-Line-up wird angezeigt
+  - Problem / Beobachtung:
+- [ ] Acts können dem Plan hinzugefügt werden
+  - Problem / Beobachtung:
+- [ ] Acts können entfernt werden
+  - Problem / Beobachtung:
+- [ ] Konflikte werden erkannt
+  - Problem / Beobachtung:
+- [ ] Plan bleibt gespeichert
+  - Problem / Beobachtung:
+- [ ] Semantische Suche funktioniert
+  - Problem / Beobachtung:
+- [ ] Suchergebnisse werden korrekt im Frontend angezeigt
+  - Problem / Beobachtung:
 
 ---
 
-## 3. Qualität der semantischen Suche
+## 2. Vektorsuche
 
-Führt mindestens fünf unterschiedliche Suchanfragen aus. Bewertet nicht nur, ob technisch Treffer geliefert werden, sondern auch, ob sie inhaltlich passen.
+### Embeddings
 
-### Vorgeschlagene Suchanfragen
+- [x] Für alle relevanten Artists existiert ein Embedding
+  - Beobachtung:
+- [ ] Jedes Embedding hat 384 Dimensionen
+  - Beobachtung:
+- [ ] Name, Genre und Description werden verwendet
+  - Beobachtung:
+- [ ] Die Pflichtfelder `genre` und `description` werden durch Datenbankregeln und Tests validiert
+  - Beobachtung:
+- [ ] Artists ohne Embedding sind zulässig und werden von der Vektorsuche kontrolliert ausgeschlossen
+  - Beobachtung:
 
-- `elektronische Musik`
-- `ruhige Musik am Nachmittag`
-- `Rockmusik`
-- `Musik zum Tanzen`
-- eine englische Suchanfrage
-- eine ungewöhnliche oder fachfremde Suchanfrage
+### Suche
 
-### Testprotokoll
+Testet mehrere unterschiedliche Suchanfragen.
 
-Bewertung: **0 = unbrauchbar**, **1 = schwach**, **2 = teilweise passend**, **3 = gut passend**
+- [ ] Query „elektronische Musik“ liefert sinnvolle Ergebnisse
+  - Erwartung: elektronische Artists
+  - Tatsächliche Treffer / Beobachtung:
+- [ ] Query „ruhige Musik“ liefert sinnvolle Ergebnisse
+  - Erwartung: passende ruhigere Artists
+  - Tatsächliche Treffer / Beobachtung:
+- [ ] Query „Rockmusik“ liefert sinnvolle Ergebnisse
+  - Erwartung: Rock-Artists
+  - Tatsächliche Treffer / Beobachtung:
+- [ ] Query „Musik zum Tanzen“ liefert sinnvolle Ergebnisse
+  - Erwartung: semantisch passende Artists
+  - Tatsächliche Treffer / Beobachtung:
+- [ ] Eine ungewöhnliche oder unsinnige Query wird sinnvoll behandelt
+  - Erwartung: keine oder nur schwache Treffer
+  - Tatsächliche Treffer / Beobachtung:
 
-| Nr. | Query | Erwartung | Tatsächliche Treffer | Bewertung 0–3 | Beobachtung |
-|---:|---|---|---|---:|---|
-| 1 | | | | | |
-| 2 | | | | | |
-| 3 | | | | | |
-| 4 | | | | | |
-| 5 | | | | | |
+Zusätzlich prüfen:
 
-### Regeln der Suche
-
-- [ ] Es werden höchstens die fünf ähnlichsten Artists berücksichtigt.
-- [ ] Der definierte Mindestwert von 0,3 wird korrekt angewendet.
-- [ ] Treffer unterhalb des Mindestwerts werden nicht angezeigt.
-- [ ] Die Ergebnisse sind nach Relevanz beziehungsweise Ähnlichkeit sortiert.
-- [ ] Zu den gefundenen Artists werden die richtigen Acts geliefert.
-- [ ] Artists ohne Embedding werden kontrolliert ignoriert.
-- [ ] Interne Embedding-Vektoren werden nicht an das Frontend übertragen.
-
-> Wichtig: Prüft im Code, ob der Wert `0,3` als **Ähnlichkeit** oder als **Distanz** behandelt wird. Bei `<=>` liefert pgvector eine Kosinusdistanz; Ähnlichkeit und Distanz dürfen nicht verwechselt werden.
-
----
-
-## 4. Grenzfälle und Robustheit
-
-| Testfall | Erwartetes Verhalten | Ergebnis | OK |
-|---|---|---|---:|
-| Leere Query | verständliche Validierung oder leere Trefferliste | | ☐ |
-| Nur Leerzeichen | wie leere Query | | ☐ |
-| Sehr lange Query | kontrollierte Verarbeitung oder Begrenzung | | ☐ |
-| Sonderzeichen | kein Serverfehler | | ☐ |
-| Deutsche Query | sinnvolle Verarbeitung | | ☐ |
-| Englische Query | sinnvolle Verarbeitung | | ☐ |
-| Query ohne Festivalbezug | keine oder nachvollziehbar schwache Treffer | | ☐ |
-| Artist ohne Description | kein Serverfehler | | ☐ |
-| Artist ohne Genre | kein Serverfehler | | ☐ |
-| Artist ohne Embedding | wird ignoriert oder gezielt behandelt | | ☐ |
-| Datenbank ohne Artists | leere Trefferliste | | ☐ |
-| Embedding-Modell nicht verfügbar | kontrollierte Fehlermeldung | | ☐ |
-| Datenbank nicht verfügbar | kontrollierte Fehlermeldung | | ☐ |
+- [ ] maximal **Top 5 Artists**
+- [ ] Mindestähnlichkeit **0,3**
+- [ ] Artists unterhalb des Mindestwerts werden nicht angezeigt
+- [ ] Acts werden korrekt den gefundenen Artists zugeordnet
+- [ ] Ergebnisse sind nach Ähnlichkeit sortiert
 
 ---
 
-## 5. Datenbank und pgvector
+## 3. Grenzfälle
 
-- [ ] Die PostgreSQL-Erweiterung `vector` ist aktiviert.
-- [ ] `Artist.embedding` verwendet `vector(384)`.
-- [ ] Embeddings werden korrekt gespeichert.
-- [ ] `NULL`-Embeddings werden von der Suche ausgeschlossen.
-- [ ] Der Operator `<=>` wird bewusst als Kosinusdistanz eingesetzt.
-- [ ] Der Query-Vektor wird sicher parametrisiert an die Datenbank übergeben.
-- [ ] Das Ergebnislimit wird serverseitig angewendet.
-- [ ] Die Mindestschwelle wird serverseitig angewendet.
-- [ ] Datenbankmigration oder Setup-Schritte sind dokumentiert.
+Was passiert bei:
 
-### SQL-/Datenbank-Beobachtungen
+- [ ] leerem Suchfeld?
+- [ ] nur Leerzeichen?
+- [ ] sehr langer Query?
+- [ ] Sonderzeichen?
+- [ ] deutscher Sprache?
+- [ ] englischer Sprache?
+- [ ] Query ohne semantischen Bezug zum Festival?
+- [ ] leerem oder ungültigem Pflichtfeld `description`?
+- [ ] leerem oder ungültigem Pflichtfeld `genre`?
+- [ ] Datenbank ohne Artists?
+- [ ] fehlendem Embedding?
 
-- 
+Erwartung:
+
+Die Anwendung sollte kontrolliert reagieren und nicht mit einem Serverfehler abbrechen.
 
 ---
 
-## 6. API-Prüfung
+## 4. Datenbank / pgvector
 
-### Getesteter Endpunkt
+Prüfen:
 
-```text
-Methode / URL:
-Query:
-Statuscode:
+- [ ] `vector`-Extension ist aktiviert
+- [ ] `Artist.embedding` verwendet `vector(384)`
+- [ ] Embeddings werden korrekt gespeichert
+- [ ] `NULL`-Embeddings werden bei der Suche ignoriert
+- [ ] `<=>` wird korrekt für die Distanzberechnung verwendet
+- [ ] Query-Vektor wird korrekt an die Datenbank übergeben
+- [ ] `LIMIT` wird serverseitig angewendet
+
+---
+
+## 5. Backend-Qualität
+
+Prüfen:
+
+- [ ] Embedding-Erzeugung ist gekapselt
+- [ ] Embedding-Modell wird nicht bei jeder Query neu geladen
+- [ ] Datenbanklogik liegt nicht direkt im Router
+- [ ] Search-Endpoint hat eine klare Verantwortung
+- [ ] Fehler werden sinnvoll behandelt
+- [ ] Funktionen haben verständliche Namen
+- [ ] unnötige Duplikation wurde vermieden
+- [ ] Konfiguration ist nicht hart codiert
+
+---
+
+## 6. API-Check
+
+Beispiel:
+
+```http
+GET /api/search?q=elektronische%20Musik
 ```
 
-- [ ] Der HTTP-Status ist passend.
-- [ ] Die JSON-Struktur ist konsistent.
-- [ ] Es werden nur benötigte Daten geliefert.
-- [ ] Eine leere Trefferliste ist eine gültige Antwort.
-- [ ] Fehlerhafte Requests erhalten eine verständliche Client-Fehlermeldung.
-- [ ] Interne Fehler geben keine sensiblen Details preis.
-- [ ] Die API-Dokumentation entspricht dem tatsächlichen Verhalten.
+Prüfen:
 
-### Beispielantwort / Beobachtung
-
-```json
-{}
-```
+- [ ] HTTP-Status korrekt
+- [ ] JSON-Struktur konsistent
+- [ ] nur benötigte Daten werden geliefert
+- [ ] keine internen Embedding-Vektoren werden übertragen
+- [ ] leere Trefferliste ist erlaubt
+- [ ] fehlerhafte Requests liefern verständliche Fehler
 
 ---
 
-## 7. Backend- und Codequalität
+## 7. Tests
 
-- [ ] Die Erzeugung von Embeddings ist in einem eigenen Modul gekapselt.
-- [ ] Das Embedding-Modell wird lazy geladen und wiederverwendet.
-- [ ] Das Modell wird nicht bei jeder Query neu geladen.
-- [ ] Datenbanklogik liegt nicht direkt im Router.
-- [ ] Der Search-Endpoint besitzt eine klare Verantwortung.
-- [ ] Validierung und Fehlerbehandlung sind nachvollziehbar.
-- [ ] Funktionen und Variablen sind verständlich benannt.
-- [ ] Es gibt keine auffällige Code-Duplizierung.
-- [ ] Modellname, Dimension, Limit und Schwellenwert sind nicht verstreut hart codiert.
-- [ ] Kommentare erklären das Warum und wiederholen nicht nur den Code.
-- [ ] Abhängigkeiten sind vollständig in der Projektkonfiguration erfasst.
+Existieren Tests für:
 
-### Positiver Codebefund
-
-- 
-
-### Mögliche Verbesserung
-
-- 
-
----
-
-## 8. Automatisierte Tests
-
-### Vorhandene Tests
-
-- [ ] Normale Suche mit Treffern
+- [ ] normale Suche
 - [ ] Top-5-Begrenzung
-- [ ] Mindestwert 0,3
-- [ ] Keine passenden Treffer
+- [ ] Mindestähnlichkeit 0,3
+- [ ] keine Treffer
 - [ ] Artist ohne Embedding
-- [ ] Leere oder ungültige Query
+- [ ] leere Query
 - [ ] Search-API
 - [ ] Datenbankzugriff
-- [ ] Embedding-Funktion beziehungsweise Embedding-Text
-- [ ] Fehlerfall des Embedding-Modells
+- [ ] Embedding-Funktion
 
-### Testebenen richtig getrennt
+Zusatzfrage:
 
-- [ ] Reine Logik wird mit Unit-Tests geprüft.
-- [ ] Das Embedding-Modell kann in API-Tests ersetzt oder gemockt werden.
-- [ ] Die echte Vektorabfrage wird gegen PostgreSQL mit pgvector integriert getestet.
-- [ ] Tests hängen nicht unnötig von Netzwerkzugriffen ab.
-- [ ] Testergebnisse sind reproduzierbar.
+**Welche Teile lassen sich ohne echte pgvector-Datenbank testen und welche benötigen Integrationstests?**
 
-### Testergebnis
+---
+
+## 8. AI-/ML-spezifischer Quality Check
+
+Die wichtigste Frage:
+
+> Liefert die Suche nur technisch korrekte oder auch fachlich sinnvolle Ergebnisse?
+
+Dazu mehrere Queries ausprobieren und jeweils bewerten:
+
+- [ ] Query 1 bewertet
+  - Query:
+  - Treffer:
+  - Bewertung: plausibel / überraschend / falsch
+- [ ] Query 2 bewertet
+  - Query:
+  - Treffer:
+  - Bewertung: plausibel / überraschend / falsch
+- [ ] Query 3 bewertet
+  - Query:
+  - Treffer:
+  - Bewertung: plausibel / überraschend / falsch
+
+Auffälligkeiten dokumentieren:
+
+- Welche Query funktioniert besonders gut?
+- Welche Query funktioniert schlecht?
+- Welche Artists werden unerwartet gefunden?
+- Welche erwarteten Artists fehlen?
+
+---
+
+## 9. Code Review
+
+Sucht mindestens:
+
+### Einen positiven Punkt
 
 ```text
-Ausgeführter Befehl:
-Bestanden:
-Fehlgeschlagen:
-Übersprungen:
+Was ist gut gelöst?
+
 ```
 
-### Wichtigster fehlender Test
+### Eine Verbesserung
 
-- 
+```text
+Was könnte vereinfacht oder robuster gemacht werden?
 
----
+```
 
-## 9. Fachliche AI-/ML-Qualität
+### Ein Risiko
 
-- [ ] Gute Treffer sind für Menschen nachvollziehbar.
-- [ ] Erwartete Artists erscheinen bei typischen Queries.
-- [ ] Offensichtlich unpassende Artists werden nicht hoch gerankt.
-- [ ] Deutschsprachige Queries funktionieren ausreichend gut.
-- [ ] Kleine Umformulierungen führen zu vergleichbaren Ergebnissen.
-- [ ] Schwache oder fehlende Treffer werden nicht als sichere Empfehlung dargestellt.
-- [ ] Die Grenzen des verwendeten Modells sind dokumentiert.
+```text
+Was könnte später zu Problemen führen?
 
-### Vergleich durch Umformulierung
+```
 
-| Ausgangsquery | Umformulierung | Ergebnisse vergleichbar? | Beobachtung |
-|---|---|---:|---|
-| | | ☐ | |
-| | | ☐ | |
+### Einen fehlenden Test
 
-### Auffälligkeiten
+```text
+Welcher Test sollte ergänzt werden?
 
-- Besonders gute Query:
-- Besonders schlechte Query:
-- Unerwarteter Treffer:
-- Erwarteter, aber fehlender Treffer:
+```
 
 ---
 
-## 10. Findings
-
-Priorität: **kritisch**, **hoch**, **mittel**, **niedrig**
-
-| ID | Befund | Priorität | Reproduktion / Beleg | Empfohlene Maßnahme | Issue-Link |
-|---|---|---|---|---|---|
-| F-01 | | | | | |
-| F-02 | | | | | |
-| F-03 | | | | | |
-
----
-
-## 11. Review-Ergebnis
+## 10. Ergebnis des Reviews
 
 ### Was funktioniert gut?
 
-- 
+```text
+
+
+```
 
 ### Gefundene Probleme
 
-- 
+```text
+
+
+```
 
 ### Verbesserungsvorschläge
 
-- 
+```text
+
+
+```
 
 ### Fehlende Tests
 
-- 
+```text
+
+
+```
 
 ### Wichtigste Erkenntnis
 
-- 
+```text
 
-## Freigabeentscheidung
 
-- [ ] **Freigabe** – keine wesentlichen Probleme gefunden.
-- [ ] **Freigabe mit bekannten Einschränkungen** – Findings sind dokumentiert und vertretbar.
-- [ ] **Änderungen erforderlich** – mindestens ein wesentlicher Befund muss behoben werden.
-
-### Begründung
-
-- 
-
-### Nächste Schritte
-
-| Maßnahme | Verantwortlich | Priorität / Termin | GitHub Issue |
-|---|---|---|---|
-| | | | |
-| | | | |
+```
 
 ---
 
-## Abschluss der Code Challenge
+## Abschlussfrage
 
-Jedes Team nennt zum Schluss:
+**Würden wir diese Version nach unserem Review freigeben?**
 
-1. **einen positiven Punkt**,
-2. **eine Verbesserung**,
-3. **ein Risiko** und
-4. **einen fehlenden Test**.
-
+- [ ] technisch funktionsfähig
+- [ ] ausreichend getestet
+- [ ] bekannte Risiken dokumentiert
+- [ ] Verbesserungen als Issues festgehalten
